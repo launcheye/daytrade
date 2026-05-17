@@ -86,6 +86,10 @@ def create_app(db_path: Path | str = DEFAULT_DB_PATH) -> FastAPI:
     def status() -> Any:
         return _safe(lambda d: d.status())
 
+    @app.get("/api/logs")
+    def logs(lines: int = 200) -> Any:
+        return _safe(lambda d: d.logs(lines))
+
     @app.get("/api/progress")
     def progress() -> Any:
         return _safe(lambda d: d.progress())

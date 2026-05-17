@@ -160,8 +160,10 @@ class Observer:
 
         assessments = []
         illiquid: List[str] = []
-        for symbol in self.watchlist_config.symbols:
-            self._set_now("Running technical analysis", symbol, now)
+        watch = self.watchlist_config.symbols
+        for idx, symbol in enumerate(watch, start=1):
+            self._set_now("Running technical analysis", symbol, now,
+                          symbol_index=idx, symbol_total=len(watch))
             try:
                 assessment = self._observe_symbol(symbol, now, memory,
                                                   recent_accuracy, equity)
@@ -425,7 +427,8 @@ class Observer:
             pass
 
     def _set_now(self, step: str, symbol: str, now: datetime,
-                 done: bool = False) -> None:
+                 done: bool = False, symbol_index: int = 0,
+                 symbol_total: int = 0) -> None:
         """Write the live 'what is it doing right now' state to data/now.json."""
         try:
             next_cycle = (now + timedelta(seconds=self._interval)).isoformat() \
@@ -436,10 +439,13 @@ class Observer:
                 "started_at": now.isoformat(),
                 "current_step": step,
                 "current_symbol": symbol,
+                "symbol_index": symbol_index,
+                "symbol_total": symbol_total,
                 "next_cycle_at": next_cycle,
                 "errors_this_cycle": getattr(self, "_errors_this_cycle", 0),
                 "data_source": getattr(self.feed, "source", "simulated"),
                 "steps": CYCLE_STEPS,
+                "updated_at": datetime.now(timezone.utc).isoformat(),
             }), encoding="utf-8")
         except OSError:  # pragma: no cover
             pass

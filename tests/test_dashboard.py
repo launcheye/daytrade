@@ -143,3 +143,11 @@ def test_dashboard_health_denies_wallets_and_transfers(tmp_path):
     assert body["real_trading"] is False
     assert body["wallets"] is False
     assert body["bank_transfers"] is False
+
+
+def test_dashboard_logs_endpoint(tmp_path):
+    """The /api/logs endpoint (the 'See Terminal' view) returns a tail."""
+    client = TestClient(create_app(tmp_path / "obs.db"))
+    body = client.get("/api/logs?lines=50").json()
+    assert "lines" in body and isinstance(body["lines"], list)
+    assert "exists" in body

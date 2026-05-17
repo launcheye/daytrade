@@ -27,9 +27,25 @@ _LATEST_CYCLE = _REPO_ROOT / "reports" / "observer" / "latest.json"
 _NOW_PATH = _REPO_ROOT / "data" / "now.json"
 _LEARNING_STATE = _REPO_ROOT / "data" / "learning_state.json"
 _DAILY_DIR = _REPO_ROOT / "reports" / "daily"
+_LOG_FILE = _REPO_ROOT / "logs" / "daytrade.log"
 
 # A heartbeat older than this means the observer is not considered "live".
 _HEARTBEAT_STALE_SECONDS = 1200.0
+
+
+def _tail(path: Path, n: int) -> List[str]:
+    """Return the last ``n`` lines of ``path`` — reads only the tail bytes."""
+    if not path.exists():
+        return []
+    try:
+        with path.open("rb") as fh:
+            fh.seek(0, 2)
+            size = fh.tell()
+            fh.seek(max(0, size - 200_000))  # last ~200 KB is plenty
+            data = fh.read().decode("utf-8", "replace")
+    except OSError:
+        return []
+    return data.splitlines()[-n:]
 
 
 def _starting_cash() -> float:
@@ -325,9 +341,21 @@ class DashboardData:
             "next_cycle_at": now.get("next_cycle_at"),
             "errors_this_cycle": now.get("errors_this_cycle", 0),
             "steps": now.get("steps", []),
+            "symbol_index": now.get("symbol_index", 0),
+            "symbol_total": now.get("symbol_total", 0),
+            "updated_at": now.get("updated_at"),
             "phase": state.get("current_phase", "—"),
             "learning_status": state.get("status", "—"),
             "data_source": now.get("data_source", "simulated"),
+        }
+
+    def logs(self, lines: int = 200) -> Dict[str, Any]:
+        """Tail of the observer's log file — the live 'terminal' view."""
+        n = max(1, min(int(lines), 1000))
+        return {
+            "file": "logs/daytrade.log",
+            "exists": _LOG_FILE.exists(),
+            "lines": _tail(_LOG_FILE, n),
         }
 
     def regimes(self) -> Dict[str, Any]:
