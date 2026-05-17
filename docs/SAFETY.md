@@ -46,6 +46,38 @@ safe values are explicit and test-asserted — not so they can be changed.
 raises, that unsafe configs are rejected, and that no module exposes a
 live-order function.
 
+## 6. Sandbox (testnet) execution is testnet-only
+
+The optional sandbox layer (`daytrade.exchanges.sandbox`) can place orders on
+an exchange **testnet** — play money. Its safety is structural:
+
+- A `SandboxExchangeClient` can only be built against a URL in a hard-coded
+  **testnet allowlist** (`testnet.binance.vision`, `api-testnet.bybit.com`).
+  There is no parameter for an arbitrary URL; every request re-asserts it.
+- On connect, the client reads the API key's permissions and **rejects any
+  key with withdrawal scope** (`WithdrawalPermissionError`) and any key that
+  is not a testnet key.
+- Keys must be **read-only by default**; placing testnet orders requires the
+  operator to explicitly set `sandbox.require_read_only_keys: false`. Even
+  then, withdrawal access is still banned.
+- Sandbox is **off by default** (`sandbox.enabled: false`) and needs
+  `runtime.allow_network: true` plus testnet keys in `.env`.
+
+There is no mainnet execution client anywhere in the codebase.
+
+## 7. No money movement
+
+There is no bank-transfer, withdrawal, wire, or payout code. The accounting
+layer (`daytrade.accounting`) only **reports** simulated results and exports a
+tax CSV; it never moves funds. `pytest -m safety` includes a test that scans
+the source for money-movement function definitions and asserts there are none.
+
+## 8. Manual approval
+
+Every trade — even a paper trade — passes through a manual-approval card and
+requires the operator to type the confirmation phrase. Nothing executes on a
+default answer, an empty line, or a timeout.
+
 ## Why this matters
 
 Backtests and paper trading systematically *overstate* performance. Making

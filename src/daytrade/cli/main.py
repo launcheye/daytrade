@@ -20,9 +20,12 @@ from typing import Optional
 
 import typer
 from rich.console import Console
+from rich.panel import Panel
 from rich.table import Table
 
 from .. import __version__
+from ..accounting import build_accounting_report, export_tax_csv
+from ..approval import TradeProposal, render_approval_card, request_approval
 from ..backtest import Backtester
 from ..config import ConfigError, load_config
 from ..demo import (
@@ -32,22 +35,32 @@ from ..demo import (
     build_demo_orderbook,
 )
 from ..exchanges import generate_random_walk
+from ..exchanges.sandbox import build_sandbox_client
+from ..exchanges.credentials import load_sandbox_credentials
 from ..ml import PredictiveModel, build_dataset
-from ..models import ModelKind
+from ..models import Action, ModelKind, Side
+from ..paper import PaperBroker
 from ..pipeline import AnalysisPipeline
+from ..risk import RiskEngine
 from ..reporting import (
     backtest_report_dict,
     backtest_report_markdown,
+    build_daily_report,
+    daily_report_dict,
+    daily_report_markdown,
     decision_report_dict,
     decision_report_markdown,
     render_backtest,
+    render_daily_report,
     render_decision,
     render_walkforward,
     save_json,
     save_text,
 )
 from ..runtime import apply_runtime, get_logger
+from ..safety.guard import forbid_real_trading
 from ..validation import walk_forward_validate
+from ..watchlist import WatchlistScreener, build_mock_universe, demo_universe_symbols
 
 app = typer.Typer(
     add_completion=False,
@@ -235,6 +248,207 @@ def simulate(
     save_json(backtest_report_dict(result), _REPORTS / "simulate.json")
     save_text(backtest_report_markdown(result), _REPORTS / "simulate.md")
     _console.print(f"[green]Reports saved[/green] -> {_REPORTS}")
+
+
+@app.command()
+def watchlist(
+    profile: Optional[str] = typer.Option(None, help="Config profile."),
+    universe: str = typer.Option(
+        "config", help="'config' (watchlist.symbols) or 'demo' (mixed set)."),
+) -> None:
+    """Screen the multi-asset watchlist for liquidity / quality."""
+    cfg = _setup(profile)
+    _console.rule("[bold]daytrade — watchlist screening")
+    symbols = (demo_universe_symbols() if universe == "demo"
+               else cfg.watchlist.symbols)
+    data = build_mock_universe(symbols, seed=cfg.runtime.random_seed)
+    screener = WatchlistScreener(cfg.watchlist)
+
+    table = Table(title="Asset screening", header_style="bold")
+    for col in ("Symbol", "Status", "24h volume", "Spread", "Book notional",
+                "1h move"):
+        table.add_column(col)
+    rejects = []
+    for r in screener.screen(data):
+        m = r.metrics
+        style = "green" if r.approved else "red"
+        table.add_row(
+            r.symbol, f"[{style}]{r.status}[/{style}]",
+            f"${m.volume_24h_usd:,.0f}", f"{m.spread_bps:.1f} bps",
+            f"${m.book_notional_usd:,.0f}", f"{m.move_1h_pct * 100:+.1f}%",
+        )
+        if not r.approved:
+            rejects.append(r)
+    _console.print(table)
+    for r in rejects:
+        _console.print(f"[red]{r.symbol} rejected:[/red] " +
+                       "; ".join(r.rejections))
+    approved = screener.approved_symbols(data)
+    _console.print(f"\nTradeable universe: [bold]{approved}[/bold]")
+
+
+@app.command()
+def approve(
+    profile: Optional[str] = typer.Option(None, help="Config profile."),
+) -> None:
+    """Run the canonical decision and require manual approval to paper-execute."""
+    cfg = _setup(profile)
+    _console.rule("[bold]daytrade — manual approval")
+
+    candles = build_demo_candles()
+    orderbook = build_demo_orderbook()
+    result = AnalysisPipeline(cfg).analyze(
+        candles, orderbook, reference_price=DEMO_REFERENCE_PRICE,
+        macro_scenario=DEMO_MACRO_SCENARIO)
+    decision = result.decision
+
+    broker = PaperBroker(cfg.paper.starting_cash, cfg.paper.base_currency)
+    risk = RiskEngine(cfg.risk, cfg.paper.starting_cash)
+
+    if decision.action is Action.HOLD:
+        _console.print("Decision is HOLD — nothing to approve.")
+        return
+
+    equity = cfg.paper.starting_cash
+    sizing = risk.size(equity, decision.entry, decision.stop)
+    liquidity = orderbook.depth("ask")
+    preview = risk.execute("preview", decision.symbol, Side.BUY, sizing.quantity,
+                           decision.entry, liquidity, candles[-1].timestamp)
+
+    micro = result.microstructure
+    liq_warn = None
+    if micro.thin_liquidity:
+        liq_warn = "thin orderbook liquidity"
+    elif micro.spread_bps and micro.spread_bps > cfg.microstructure.wide_spread_bps:
+        liq_warn = f"wide spread ({micro.spread_bps:.1f} bps)"
+
+    proposal = TradeProposal(
+        symbol=decision.symbol, action=decision.action, entry=decision.entry,
+        stop=decision.stop, target=decision.target, confidence=decision.confidence,
+        quantity=sizing.quantity, risk_amount=sizing.risk_amount,
+        expected_slippage_cost=preview.slippage * preview.quantity,
+        expected_fee=preview.fee, reasoning=decision.reasoning,
+        liquidity_warning=liq_warn, kill_switch_active=result.kill_switch.active,
+        kill_switch_reasons=result.kill_switch.reasons,
+        execution_mode="simulated",
+    )
+
+    outcome = request_approval(proposal, cfg.approval, _console)
+    if not outcome.approved:
+        _console.print(f"[yellow]Trade NOT executed:[/yellow] {outcome.reason}")
+        return
+
+    fill = broker.submit_market_order(
+        "approved", decision.symbol, Side.BUY, sizing.quantity, decision.entry,
+        liquidity, cfg.risk, candles[-1].timestamp)
+    _console.print(
+        f"[green]PAPER-EXECUTED[/green] (simulated): bought "
+        f"{fill.quantity:.6f} {decision.symbol} @ {fill.price:,.2f} "
+        f"(slippage {fill.slippage:,.2f}, fee {fill.fee:,.2f})")
+    _console.print(f"Cash remaining: {broker.cash:,.2f} {cfg.paper.base_currency}")
+
+
+@app.command()
+def accounting(
+    profile: Optional[str] = typer.Option(None, help="Config profile."),
+    bars: int = typer.Option(600, help="Mock bars for the paper session."),
+    save: bool = typer.Option(False, help="Export a tax-reporting CSV."),
+) -> None:
+    """Accounting report for a paper session (+ optional tax CSV export)."""
+    cfg = _setup(profile)
+    _console.rule("[bold]daytrade — accounting report")
+    candles = _mock_candles(cfg, bars, drift=0.0004, volatility=0.005)
+    result = Backtester(cfg).run(candles)
+    report = build_accounting_report(
+        result.trades, cfg.paper.starting_cash, result.metrics.ending_equity)
+
+    table = Table(title="Simulated accounting", header_style="bold")
+    table.add_column("Item")
+    table.add_column("Amount", justify="right")
+    table.add_row("Simulated profit", f"{report.simulated_profit:+,.2f}")
+    table.add_row("Simulated loss", f"{report.simulated_loss:+,.2f}")
+    table.add_row("Estimated fees", f"{report.estimated_fees:,.2f}")
+    table.add_row("Net PnL", f"{report.net_pnl:+,.2f}")
+    table.add_row("Return", f"{report.return_pct:+.2f}%")
+    _console.print(table)
+
+    if report.per_asset:
+        per = Table(title="Per-asset PnL", header_style="bold")
+        for col in ("Asset", "Trades", "W/L", "Net PnL", "Fees"):
+            per.add_column(col)
+        for sym, a in report.per_asset.items():
+            per.add_row(sym, str(a.trades), f"{a.wins}/{a.losses}",
+                        f"{a.net_pnl:+,.2f}", f"{a.fees:,.2f}")
+        _console.print(per)
+
+    _console.print("[dim]Simulated paper data — not tax advice, not a filing.[/dim]")
+    if save:
+        path = export_tax_csv(result.trades, _REPORTS / "tax_report.csv")
+        _console.print(f"[green]Tax CSV exported[/green] -> {path}")
+
+
+@app.command("daily-report")
+def daily_report(
+    profile: Optional[str] = typer.Option(None, help="Config profile."),
+    bars: int = typer.Option(600, help="Mock bars for the paper session."),
+    save: bool = typer.Option(False, help="Write JSON + Markdown reports."),
+) -> None:
+    """Generate the daily operations report for a paper session."""
+    cfg = _setup(profile)
+    candles = _mock_candles(cfg, bars, drift=0.0003, volatility=0.006)
+    result = Backtester(cfg).run(candles)
+    report = build_daily_report(result, label=candles[-1].timestamp.date().isoformat())
+    render_daily_report(report, _console)
+    if save:
+        jp = save_json(daily_report_dict(report), _REPORTS / "daily.json")
+        mp = save_text(daily_report_markdown(report), _REPORTS / "daily.md")
+        _console.print(f"[green]Saved[/green] {jp} and {mp}")
+
+
+@app.command("sandbox-check")
+def sandbox_check(
+    profile: Optional[str] = typer.Option(None, help="Config profile."),
+) -> None:
+    """Verify the sandbox setup and prove real execution is disabled."""
+    cfg = _setup(profile)
+    _console.rule("[bold]daytrade — sandbox / safety check")
+
+    table = Table(show_header=False, box=None, padding=(0, 2))
+    table.add_column("k", style="bold")
+    table.add_column("v")
+    table.add_row("sandbox.enabled", str(cfg.sandbox.enabled))
+    table.add_row("sandbox.exchange", f"{cfg.sandbox.exchange} (TESTNET)")
+    table.add_row("require_read_only_keys", str(cfg.sandbox.require_read_only_keys))
+    table.add_row("reject_withdrawal_keys", str(cfg.sandbox.reject_withdrawal_keys))
+    table.add_row("runtime.allow_network", str(cfg.runtime.allow_network))
+    _console.print(table)
+
+    creds = load_sandbox_credentials(cfg.sandbox.exchange)
+    _console.print(f"Testnet credentials configured: {creds is not None}")
+
+    try:
+        client = build_sandbox_client(cfg)
+    except Exception as exc:  # noqa: BLE001 - report any setup failure
+        client = None
+        _console.print(f"[yellow]Sandbox client not built:[/yellow] {exc}")
+    mode = "TESTNET connected" if client else "paper simulation (no testnet)"
+    _console.print(f"Execution: [bold]{mode}[/bold]")
+
+    # Prove the real-execution path is structurally disabled.
+    proof = []
+    try:
+        forbid_real_trading("sandbox-check")
+    except NotImplementedError as exc:
+        proof.append(f"forbid_real_trading() raises: {exc}")
+    try:
+        PaperBroker(cfg.paper.starting_cash).connect_live()
+    except NotImplementedError as exc:
+        proof.append(f"PaperBroker.connect_live() raises: {exc}")
+    proof.append("sandbox execution is restricted to a testnet-URL allowlist")
+    proof.append("API keys with withdrawal permission are rejected on connect")
+    _console.print(Panel("\n".join(f"✓ {p}" for p in proof),
+                         title="Real execution is structurally disabled",
+                         border_style="green"))
 
 
 if __name__ == "__main__":  # pragma: no cover

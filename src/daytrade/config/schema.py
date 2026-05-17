@@ -227,12 +227,34 @@ class RiskConfig(_Section):
         default=0.01, gt=0, le=0.25,
         description="Fraction of equity risked between entry and stop.",
     )
-    max_position_pct: float = Field(default=0.50, gt=0, le=1.0)
+    max_position_pct: float = Field(
+        default=0.25, gt=0, le=1.0,
+        description="Max notional of a single per-coin position, as a fraction "
+                    "of equity.",
+    )
     max_daily_loss_pct: float = Field(default=0.05, gt=0, le=1.0)
+    max_weekly_loss_pct: float = Field(
+        default=0.12, gt=0, le=1.0,
+        description="Rolling 7-day loss limit; blocks new entries once hit.",
+    )
+    max_open_positions: int = Field(
+        default=3, ge=1,
+        description="Maximum number of simultaneously open positions.",
+    )
+    loss_cooldown_bars: int = Field(
+        default=20, ge=0,
+        description="Bars to wait after a losing trade before a new entry.",
+    )
     partial_fill_liquidity_frac: float = Field(
         default=0.25, gt=0, le=1.0,
         description="Max fraction of top-of-book liquidity one order may consume.",
     )
+
+    @model_validator(mode="after")
+    def _loss_limits_ordered(self) -> "RiskConfig":
+        if self.max_weekly_loss_pct < self.max_daily_loss_pct:
+            raise ValueError("max_weekly_loss_pct must be >= max_daily_loss_pct")
+        return self
 
 
 class PaperConfig(_Section):
@@ -246,6 +268,97 @@ class BacktestConfig(_Section):
         default=4.0, gt=0,
         description="A backtest Sharpe-like ratio above this is flagged unrealistic.",
     )
+
+
+class WatchlistConfig(_Section):
+    """Multi-asset watchlist with liquidity / quality screening."""
+
+    symbols: List[str] = Field(
+        default_factory=lambda: ["BTCUSDT", "ETHUSDT", "SOLUSDT"],
+        description="Tradeable universe — extend with configurable altcoins.",
+    )
+    min_24h_volume_usd: float = Field(
+        default=50_000_000.0, gt=0,
+        description="Reject assets thinner than this in 24h quote volume.",
+    )
+    max_spread_bps: float = Field(
+        default=8.0, gt=0,
+        description="Reject assets whose top-of-book spread exceeds this.",
+    )
+    min_orderbook_notional_usd: float = Field(
+        default=200_000.0, gt=0,
+        description="Reject assets with less than this notional in the book.",
+    )
+    pump_dump_max_1h_move_pct: float = Field(
+        default=0.25, gt=0,
+        description="Reject assets that moved more than this in the last hour "
+                    "(suspected pump-and-dump).",
+    )
+
+    @field_validator("symbols")
+    @classmethod
+    def _symbols(cls, v: List[str]) -> List[str]:
+        cleaned = [s.strip().upper() for s in v if s.strip()]
+        if not cleaned:
+            raise ValueError("watchlist.symbols must not be empty")
+        return cleaned
+
+
+class ApprovalConfig(_Section):
+    """Manual-approval gate for paper / sandbox execution."""
+
+    require_manual_approval: bool = Field(
+        default=True,
+        description="If true, every trade must be confirmed at the CLI.",
+    )
+    confirmation_phrase: str = Field(
+        default="YES",
+        description="Phrase the operator must type to authorize a paper trade.",
+    )
+
+
+class SandboxConfig(_Section):
+    """Exchange-sandbox (testnet) settings.
+
+    SANDBOX = exchange TESTNET only. There is no mainnet execution path. These
+    flags exist so the safe values are explicit and validated — the validator
+    refuses any combination that would imply real-money execution.
+    """
+
+    enabled: bool = Field(
+        default=False,
+        description="Opt-in: enable testnet execution (still no real money).",
+    )
+    exchange: str = Field(
+        default="binance",
+        description="Which testnet to use: 'binance' or 'bybit'.",
+    )
+    require_read_only_keys: bool = Field(
+        default=True,
+        description="Require API keys without trade/withdraw scope by default.",
+    )
+    reject_withdrawal_keys: bool = Field(
+        default=True,
+        description="Refuse any API key that has withdrawal permission.",
+    )
+
+    @field_validator("exchange")
+    @classmethod
+    def _exchange(cls, v: str) -> str:
+        v = v.lower().strip()
+        if v not in {"binance", "bybit"}:
+            raise ValueError("sandbox.exchange must be 'binance' or 'bybit'")
+        return v
+
+    @model_validator(mode="after")
+    def _enforce_sandbox_safety(self) -> "SandboxConfig":
+        # These guards cannot be turned off — withdrawal access is never allowed.
+        if not self.reject_withdrawal_keys:
+            raise ValueError(
+                "reject_withdrawal_keys must be true — withdrawal access is "
+                "never permitted."
+            )
+        return self
 
 
 class AppConfig(_Section):
@@ -270,6 +383,9 @@ class AppConfig(_Section):
     risk: RiskConfig = Field(default_factory=RiskConfig)
     paper: PaperConfig = Field(default_factory=PaperConfig)
     backtest: BacktestConfig = Field(default_factory=BacktestConfig)
+    watchlist: WatchlistConfig = Field(default_factory=WatchlistConfig)
+    approval: ApprovalConfig = Field(default_factory=ApprovalConfig)
+    sandbox: SandboxConfig = Field(default_factory=SandboxConfig)
 
     @field_validator("symbol")
     @classmethod

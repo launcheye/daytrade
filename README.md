@@ -40,16 +40,41 @@ python -m pip install -e ".[dev]"
 ## Quick start
 
 ```bash
-trading-bot demo        # run the canonical BTC decision demo
-trading-bot paper       # run a paper-trading session on mock data
-trading-bot backtest    # run a backtest with realistic execution
-trading-bot train       # train the ML model with walk-forward validation
-trading-bot simulate    # full end-to-end simulation + report
-trading-bot config      # show the active (validated) configuration
+trading-bot demo          # run the canonical BTC decision demo
+trading-bot paper         # run a paper-trading session on mock data
+trading-bot backtest      # run a backtest with realistic execution
+trading-bot train         # train the ML model with walk-forward validation
+trading-bot simulate      # full end-to-end simulation + report
+trading-bot config        # show the active (validated) configuration
+
+# operations layer
+trading-bot watchlist     # screen the multi-asset watchlist for liquidity
+trading-bot approve       # decide a trade and require manual CLI approval
+trading-bot accounting    # accounting report (+ optional tax CSV export)
+trading-bot daily-report  # end-of-session operations report
+trading-bot sandbox-check # verify sandbox setup; prove real execution off
 ```
 
 By default everything runs **offline** against a deterministic mock exchange.
 Set `DAYTRADE_ALLOW_NETWORK=true` to allow read-only public market-data calls.
+
+## Paper / sandbox operations
+
+The platform monitors many crypto pairs but **only paper-trades or
+sandbox-trades** — it never places real orders or moves money.
+
+- **Watchlist** — assets are screened for 24h volume, spread, orderbook
+  depth and pump-and-dump movement before they are tradeable.
+- **Manual approval** — every trade prints a full card (entry/stop/target,
+  confidence, risk, expected slippage, liquidity & kill-switch status) and
+  requires the operator to type the confirmation phrase.
+- **Sandbox (testnet)** — opt-in, off by default. Execution is locked to an
+  exchange-testnet URL allowlist; API keys are loaded from `.env`, must be
+  read-only by default, and **any key with withdrawal permission is
+  rejected on connect**. There is no mainnet execution path.
+- **Risk controls** — per-coin position cap, daily & weekly loss limits,
+  max open positions, post-loss cooldown, plus spread/liquidity/chop and
+  confidence gates.
 
 ## Project layout
 
@@ -66,12 +91,16 @@ Set `DAYTRADE_ALLOW_NETWORK=true` to allow read-only public market-data calls.
 | `src/daytrade/validation` | Walk-forward validation + leakage checks |
 | `src/daytrade/macro` | Macro context engine (mock / Gemini) |
 | `src/daytrade/fusion` | AI decision-fusion engine |
-| `src/daytrade/safety` | Macro + micro kill switches |
-| `src/daytrade/risk` | Slippage, fees, position sizing, loss limits |
-| `src/daytrade/paper` | Paper broker + portfolio + PnL |
+| `src/daytrade/safety` | Real-trading guard + macro/micro kill switches |
+| `src/daytrade/risk` | Slippage, fees, sizing, daily/weekly loss, cooldown |
+| `src/daytrade/watchlist` | Multi-asset liquidity / pump-and-dump screening |
+| `src/daytrade/paper` | Paper broker + sandbox broker + portfolio + PnL |
+| `src/daytrade/accounting` | Accounting report + tax-CSV export (no transfers) |
 | `src/daytrade/backtest` | Backtesting / simulation engine |
-| `src/daytrade/reporting` | Console / JSON / Markdown reports |
+| `src/daytrade/reporting` | Console / JSON / Markdown + daily reports |
 | `src/daytrade/cli` | `trading-bot` command line interface |
+| `daytrade/exchanges/sandbox.py` | Testnet-only execution (URL-allowlisted) |
+| `daytrade/exchanges/credentials.py` | API-key loading + withdrawal-key rejection |
 
 ## Safety model
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 from .loader import ConfigError, DEFAULT_CONFIG_DIR, load_config, load_config_dict
 from .schema import (
     AppConfig,
+    ApprovalConfig,
     BacktestConfig,
     ConsensusConfig,
     ExchangeConfig,
@@ -21,7 +22,9 @@ from .schema import (
     RiskConfig,
     RuntimeConfig,
     SafetyConfig,
+    SandboxConfig,
     WalkForwardConfig,
+    WatchlistConfig,
 )
 
 __all__ = [
@@ -47,4 +50,7 @@ __all__ = [
     "RiskConfig",
     "PaperConfig",
     "BacktestConfig",
+    "WatchlistConfig",
+    "ApprovalConfig",
+    "SandboxConfig",
 ]

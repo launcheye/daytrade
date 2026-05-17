@@ -70,3 +70,131 @@ def test_no_leverage_in_paper_broker():
             available_liquidity=100.0, risk_config=cfg.risk,
             timestamp=datetime.now(timezone.utc),
         )
+
+
+# --- sandbox / credential safety -------------------------------------------
+
+def test_withdrawal_permission_is_rejected():
+    """An API key with withdrawal scope is refused — never allowed."""
+    from daytrade.config import load_config
+    from daytrade.exchanges.credentials import (
+        ApiKeyPermissions, WithdrawalPermissionError, enforce_key_safety,
+    )
+    cfg = load_config(load_dotenv_file=False)
+    with pytest.raises(WithdrawalPermissionError):
+        enforce_key_safety(ApiKeyPermissions(can_withdraw=True), cfg.sandbox)
+
+
+def test_mainnet_key_is_rejected():
+    """A non-testnet (mainnet) key is refused for sandbox use."""
+    from daytrade.config import load_config
+    from daytrade.exchanges.credentials import (
+        ApiKeyPermissions, MainnetKeyError, enforce_key_safety,
+    )
+    cfg = load_config(load_dotenv_file=False)
+    with pytest.raises(MainnetKeyError):
+        enforce_key_safety(ApiKeyPermissions(is_testnet=False), cfg.sandbox)
+
+
+def test_sandbox_execution_is_testnet_only():
+    """Every sandbox base URL is a testnet; mainnet hosts are rejected."""
+    from daytrade.exchanges.sandbox import (
+        _TESTNET_URLS, _assert_testnet_url, SandboxSafetyError,
+    )
+    for url in _TESTNET_URLS.values():
+        assert "testnet" in url
+        _assert_testnet_url(url)  # must not raise
+    for mainnet in ("https://api.binance.com", "https://api.bybit.com",
+                    "https://api.kraken.com"):
+        with pytest.raises(SandboxSafetyError):
+            _assert_testnet_url(mainnet)
+
+
+def test_sandbox_disabled_by_default():
+    """With default config, no sandbox client is built (pure paper mode)."""
+    from daytrade.config import load_config
+    from daytrade.exchanges.sandbox import build_sandbox_client
+    cfg = load_config(load_dotenv_file=False)
+    assert cfg.sandbox.enabled is False
+    assert build_sandbox_client(cfg) is None
+
+
+def test_config_cannot_disable_withdrawal_rejection():
+    """sandbox.reject_withdrawal_keys cannot be turned off."""
+    from daytrade.config import ConfigError, load_config_dict
+    with pytest.raises(ConfigError):
+        load_config_dict({"sandbox": {"reject_withdrawal_keys": False}})
+
+
+# --- no money-movement code exists -----------------------------------------
+
+def test_no_money_movement_functions_exist():
+    """No function in the codebase performs a bank transfer / withdrawal.
+
+    Scans every source file for function definitions whose name implies
+    moving money. The accounting layer only *reports*; it never transfers.
+    """
+    import re
+    from pathlib import Path
+
+    src = Path(__file__).resolve().parents[1] / "src" / "daytrade"
+    forbidden = re.compile(
+        r"def\s+(withdraw|transfer_funds|send_funds|wire_|payout|"
+        r"bank_transfer|move_money|cash_out)\w*\s*\(",
+        re.IGNORECASE,
+    )
+    offenders = []
+    for path in src.rglob("*.py"):
+        for lineno, line in enumerate(path.read_text().splitlines(), 1):
+            if forbidden.search(line):
+                offenders.append(f"{path.name}:{lineno}: {line.strip()}")
+    assert not offenders, f"money-movement functions found: {offenders}"
+
+
+# --- risk limits and kill switch override BUY signals ----------------------
+
+def test_risk_limit_overrides_buy_signal():
+    """A breached loss limit blocks an entry even with capital available."""
+    from datetime import datetime, timedelta, timezone
+    from daytrade.config import load_config
+    from daytrade.risk import RiskEngine
+
+    cfg = load_config(load_dotenv_file=False)
+    risk = RiskEngine(cfg.risk, starting_equity=10_000.0)
+    t0 = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    risk.observe_equity(t0, 10_000.0)
+    risk.observe_equity(t0 + timedelta(hours=1), 9_000.0)  # -10% day
+    permission = risk.evaluate_entry(9_000.0, open_positions=0, bar_index=10)
+    assert not permission.allowed  # BUY would be blocked here
+
+
+def test_kill_switch_forces_hold():
+    """An exchange-collapse macro scenario forces the decision to HOLD."""
+    from daytrade.config import load_config
+    from daytrade.exchanges import generate_random_walk
+    from daytrade.exchanges.mock import build_orderbook
+    from daytrade.models import Action
+    from daytrade.pipeline import AnalysisPipeline
+
+    cfg = load_config(load_dotenv_file=False)
+    candles = generate_random_walk("BTCUSDT", n_bars=200, start_price=30_000.0,
+                                   drift=0.001, volatility=0.004, seed=3)
+    book = build_orderbook("BTCUSDT", candles[-1].close, jitter=0.0)
+    result = AnalysisPipeline(cfg).analyze(
+        candles, book, reference_price=candles[-1].close,
+        macro_scenario="exchange_collapse")
+    assert result.kill_switch.active
+    assert result.decision.action is Action.HOLD
+
+
+def test_illiquid_coin_is_rejected():
+    """A thin, low-volume market is rejected by the watchlist screener."""
+    from daytrade.config import load_config
+    from daytrade.watchlist import WatchlistScreener, build_mock_asset_data
+
+    cfg = load_config(load_dotenv_file=False)
+    screener = WatchlistScreener(cfg.watchlist)
+    tick, book, candles = build_mock_asset_data("THINUSDT")
+    screening = screener.screen_one("THINUSDT", tick, book, candles)
+    assert not screening.approved
+    assert screening.rejections

@@ -94,3 +94,48 @@ def test_daily_loss_resets_next_day(config):
     engine.observe_equity(day1, 9_000.0)
     engine.observe_equity(day2, 9_000.0)  # new day -> baseline resets
     assert engine.permission(9_000.0).allowed
+
+
+def test_weekly_loss_limit_blocks_trading(config):
+    engine = RiskEngine(config.risk, starting_equity=10_000.0)
+    t0 = datetime(2026, 1, 5, tzinfo=timezone.utc)  # a Monday
+    engine.observe_equity(t0, 10_000.0)
+    # Down 13% within the same ISO week -> over the 12% weekly limit.
+    engine.observe_equity(t0 + timedelta(days=2), 8_700.0)
+    perm = engine.evaluate_entry(8_700.0, open_positions=0, bar_index=10)
+    assert not perm.allowed
+    assert any("weekly" in b for b in perm.blocks)
+
+
+def test_max_open_positions_blocks_entry(config):
+    engine = RiskEngine(config.risk, starting_equity=10_000.0)
+    engine.observe_equity(datetime(2026, 1, 1, tzinfo=timezone.utc), 10_000.0)
+    at_cap = config.risk.max_open_positions
+    perm = engine.evaluate_entry(10_000.0, open_positions=at_cap, bar_index=10)
+    assert not perm.allowed
+    assert any("open positions" in b for b in perm.blocks)
+
+
+def test_cooldown_blocks_entry_after_loss(config):
+    engine = RiskEngine(config.risk, starting_equity=10_000.0)
+    engine.observe_equity(datetime(2026, 1, 1, tzinfo=timezone.utc), 10_000.0)
+    engine.register_trade_close(pnl=-50.0, bar_index=100)
+    # Still inside the cooldown window.
+    blocked = engine.evaluate_entry(10_000.0, open_positions=0, bar_index=105)
+    assert not blocked.allowed
+    assert any("cooldown" in b for b in blocked.blocks)
+
+
+def test_cooldown_expires(config):
+    engine = RiskEngine(config.risk, starting_equity=10_000.0)
+    engine.observe_equity(datetime(2026, 1, 1, tzinfo=timezone.utc), 10_000.0)
+    engine.register_trade_close(pnl=-50.0, bar_index=100)
+    after = 100 + config.risk.loss_cooldown_bars + 1
+    assert engine.evaluate_entry(10_000.0, 0, bar_index=after).allowed
+
+
+def test_no_cooldown_after_winning_trade(config):
+    engine = RiskEngine(config.risk, starting_equity=10_000.0)
+    engine.observe_equity(datetime(2026, 1, 1, tzinfo=timezone.utc), 10_000.0)
+    engine.register_trade_close(pnl=+50.0, bar_index=100)  # a win
+    assert engine.evaluate_entry(10_000.0, 0, bar_index=101).allowed

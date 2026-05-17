@@ -162,6 +162,58 @@ class CoinGeckoClient(_HttpClient):
         raise ExchangeError("coingecko: orderbook not supported (no public L2 API)")
 
 
+class KrakenClient(_HttpClient):
+    """Kraken public spot market data."""
+
+    name = "kraken"
+    base_url = "https://api.kraken.com"
+    # Kraken uses XBT for Bitcoin and its own pair codes.
+    _PAIRS = {"BTCUSDT": "XBTUSDT", "ETHUSDT": "ETHUSDT", "SOLUSDT": "SOLUSDT"}
+
+    def _pair(self, symbol: str) -> str:
+        return self._PAIRS.get(symbol.upper(), symbol.upper())
+
+    def _result(self, data: dict) -> dict:
+        """Unwrap a Kraken response, surfacing any API-level error."""
+        errors = data.get("error") or []
+        if errors:
+            raise ExchangeError(f"kraken: {errors}")
+        return data["result"]
+
+    def get_ticker(self, symbol: str) -> PriceTick:
+        data = self._get("/0/public/Ticker", {"pair": self._pair(symbol)})
+        row = next(iter(self._result(data).values()))
+        price = float(row["c"][0])           # last trade price
+        base_volume_24h = float(row["v"][1])  # 24h volume in base units
+        return PriceTick(
+            symbol=symbol, exchange=self.name, price=price,
+            timestamp=datetime.now(timezone.utc),
+            volume_24h=base_volume_24h * price, status=ExchangeStatus.OK,
+        )
+
+    def get_ohlcv(self, symbol: str, limit: int = 200) -> List[OHLCV]:
+        data = self._get("/0/public/OHLC",
+                         {"pair": self._pair(symbol), "interval": 1})
+        result = self._result(data)
+        rows = next(v for k, v in result.items() if k != "last")
+        # Each row: [time, open, high, low, close, vwap, volume, count]
+        return [
+            OHLCV(symbol=symbol, timestamp=int(r[0]), open=float(r[1]),
+                  high=float(r[2]), low=float(r[3]), close=float(r[4]),
+                  volume=float(r[6]))
+            for r in rows[-limit:]
+        ]
+
+    def get_orderbook(self, symbol: str, depth: int = 20) -> OrderBookSnapshot:
+        data = self._get("/0/public/Depth",
+                         {"pair": self._pair(symbol), "count": depth})
+        book = next(iter(self._result(data).values()))
+        # Kraken levels are [price, volume, timestamp] — keep price/volume.
+        bids = [(lvl[0], lvl[1]) for lvl in book["bids"]]
+        asks = [(lvl[0], lvl[1]) for lvl in book["asks"]]
+        return _book_from_pairs(symbol, self.name, bids, asks)
+
+
 def _book_from_pairs(symbol: str, exchange: str,
                      raw_bids: List[List[str]],
                      raw_asks: List[List[str]]) -> OrderBookSnapshot:
@@ -178,6 +230,7 @@ def _book_from_pairs(symbol: str, exchange: str,
 _REGISTRY = {
     "binance": BinanceClient,
     "bybit": BybitClient,
+    "kraken": KrakenClient,
     "coingecko": CoinGeckoClient,
 }
 

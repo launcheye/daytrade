@@ -97,7 +97,11 @@ def build_orderbook(
     timestamp = timestamp or datetime(2026, 1, 1, tzinfo=timezone.utc)
 
     half_spread = mid_price * (spread_bps / 2.0) / 10_000.0
-    tick = max(mid_price * 0.0001, 0.01)
+    # Level spacing scales with price — no fixed floor, so low-priced assets
+    # (e.g. an alt at $0.40) get a sensible book rather than a crossed one.
+    tick = mid_price * 0.0001
+    # Round prices to enough significant digits for the asset's magnitude.
+    price_dp = 2 if mid_price >= 100 else (4 if mid_price >= 1 else 8)
 
     # Convert a symmetric imbalance into per-side size multipliers.
     bid_mult = 1.0 + imbalance
@@ -114,8 +118,10 @@ def build_orderbook(
         ask_price = mid_price + half_spread + tick * i
         bid_qty = max(base_quantity * decay * bid_mult * jitter_b, 1e-6)
         ask_qty = max(base_quantity * decay * ask_mult * jitter_a, 1e-6)
-        bids.append(OrderBookLevel(price=round(bid_price, 2), quantity=round(bid_qty, 6)))
-        asks.append(OrderBookLevel(price=round(ask_price, 2), quantity=round(ask_qty, 6)))
+        bids.append(OrderBookLevel(price=round(bid_price, price_dp),
+                                   quantity=round(bid_qty, 6)))
+        asks.append(OrderBookLevel(price=round(ask_price, price_dp),
+                                   quantity=round(ask_qty, 6)))
 
     return OrderBookSnapshot(
         symbol=symbol, exchange=exchange, timestamp=timestamp,

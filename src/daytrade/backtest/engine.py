@@ -15,7 +15,7 @@ optimistic upper bound.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 import numpy as np
 
@@ -23,7 +23,7 @@ from ..config.schema import AppConfig
 from ..exchanges.mock import build_orderbook
 from ..ml.model import PredictiveModel
 from ..models import Action, BacktestMetrics, OHLCV, Side
-from ..paper.broker import PaperBroker
+from ..paper.broker import PaperBroker, TradeRecord
 from ..pipeline import AnalysisPipeline
 from ..risk.engine import RiskEngine
 from ..runtime import get_logger
@@ -51,6 +51,10 @@ class BacktestResult:
     equity_curve: List[float] = field(default_factory=list)
     decisions: int = 0
     holds: int = 0
+    # reason category -> count, for skipped (non-executed) entry opportunities
+    skipped_reasons: Dict[str, int] = field(default_factory=dict)
+    # closed round-trip trades, for best/worst-decision reporting
+    trades: List["TradeRecord"] = field(default_factory=list)
 
 
 def _max_drawdown(equity: List[float]) -> float:
@@ -106,6 +110,12 @@ class Backtester:
         bars_in_position = 0
         n_decisions = 0
         n_holds = 0
+        skipped: Dict[str, int] = {}
+
+        def _skip(reason: str) -> None:
+            nonlocal n_holds
+            n_holds += 1
+            skipped[reason] = skipped.get(reason, 0) + 1
 
         for i in range(warmup, len(candles)):
             bar = candles[i]
@@ -125,6 +135,11 @@ class Backtester:
                         available_liquidity=liq, risk_config=self.config.risk,
                         timestamp=bar.timestamp,
                     )
+                    # Feed the closed-trade result to the risk engine so a
+                    # loss arms the post-loss cooldown.
+                    if broker.closed_trades:
+                        risk.register_trade_close(
+                            broker.closed_trades[-1].pnl, i)
                     open_trade = None
 
             # --- look for a new entry only when flat ---
@@ -134,12 +149,28 @@ class Backtester:
                 decision = result.decision
                 n_decisions += 1
 
-                permission = risk.permission(broker.equity(mark))
-                if (decision.action is Action.BUY and permission.allowed
-                        and decision.entry and decision.stop and decision.target):
+                open_count = 1 if broker.has_position(symbol) else 0
+                permission = risk.evaluate_entry(
+                    broker.equity(mark), open_positions=open_count, bar_index=i)
+
+                if decision.action is not Action.BUY:
+                    # Categorize why analysis did not produce a BUY.
+                    if result.kill_switch.active:
+                        _skip("kill switch")
+                    elif decision.confidence < self.config.fusion.min_confidence:
+                        _skip("confidence below threshold")
+                    else:
+                        _skip("no directional edge")
+                elif not permission.allowed:
+                    _skip(f"risk control: {permission.reason.split(':')[0]}")
+                elif not (decision.entry and decision.stop and decision.target):
+                    _skip("missing price levels")
+                else:
                     sizing = risk.size(broker.equity(mark), decision.entry,
                                        decision.stop)
-                    if sizing.is_tradeable:
+                    if not sizing.is_tradeable:
+                        _skip("position size too small")
+                    else:
                         liq = self._liquidity(bar.close)
                         fill = broker.submit_market_order(
                             order_id=f"entry-{i}", symbol=symbol, side=Side.BUY,
@@ -152,10 +183,6 @@ class Backtester:
                             target=decision.target, quantity=fill.quantity,
                             bar_opened=i,
                         )
-                    else:
-                        n_holds += 1
-                else:
-                    n_holds += 1
 
             equity_curve.append(broker.equity({symbol: bar.close}))
 
@@ -173,7 +200,9 @@ class Backtester:
         metrics = self._metrics(symbol, candles, warmup, broker, equity_curve,
                                 bars_in_position)
         return BacktestResult(metrics=metrics, equity_curve=equity_curve,
-                              decisions=n_decisions, holds=n_holds)
+                              decisions=n_decisions, holds=n_holds,
+                              skipped_reasons=skipped,
+                              trades=broker.closed_trades)
 
     # -- internals -----------------------------------------------------------
 
