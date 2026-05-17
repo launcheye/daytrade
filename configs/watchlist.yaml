@@ -1,0 +1,24 @@
+# Multi-currency watchlist for the Market Safety Observatory.
+#
+# The observer monitors these symbols. Niche / altcoin symbols are allowed
+# ONLY if they pass every filter below — low-volume, wide-spread, thin-book or
+# pump-and-dump markets are rejected automatically (see `watchlist-check`).
+#
+# This is a paper / simulation watchlist. Monitoring a symbol never places a
+# real order.
+
+symbols:
+  - BTCUSDT
+  - ETHUSDT
+  - SOLUSDT
+  - BNBUSDT
+  - XRPUSDT
+  - DOGEUSDT
+  - AVAXUSDT
+  - LINKUSDT
+
+# --- quality filters (a symbol must pass all of them) ---
+min_24h_volume_usd: 50000000        # reject low-volume markets
+max_spread_bps: 8.0                 # reject wide-spread markets
+min_orderbook_notional_usd: 200000  # reject thin orderbooks / liquidity gaps
+pump_dump_max_1h_move_pct: 0.25     # reject extreme pump/dump candles

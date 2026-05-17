@@ -78,6 +78,23 @@ Every trade — even a paper trade — passes through a manual-approval card and
 requires the operator to type the confirmation phrase. Nothing executes on a
 default answer, an empty line, or a timeout.
 
+## 9. The 24/7 observatory is observe-only
+
+The continuous observer and the dashboard add monitoring, not capability:
+
+- The observer fetches data, analyses, **paper-simulates** and records — it
+  has no order-entry method to any real exchange. `pytest -m safety` asserts
+  `Observer` exposes no `place_order` / `withdraw` / `connect_wallet`.
+- The dashboard backend is **read-only**: it queries the observatory's SQLite
+  database and renders it. It has no write or order endpoint; `/api/health`
+  reports `real_trading: false`, `paper_only: true`.
+- The Safety Score uses *observation-condition* language
+  (`SAFE_TO_OBSERVE`, `WAIT`, ...) — never "safe to invest". The daily report
+  describes whether conditions favoured the paper strategy; it never says to
+  buy or sell.
+- No wallet, no bank transfer, no payment code exists anywhere — two
+  source-scanning safety tests enforce this across the whole package.
+
 ## Why this matters
 
 Backtests and paper trading systematically *overstate* performance. Making

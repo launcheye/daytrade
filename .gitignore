@@ -31,7 +31,13 @@ coverage.xml
 artifacts/
 runs/
 *.log
+logs/
 data/cache/
 models/*.pkl
 reports/*.json
 reports/*.md
+reports/observer/
+reports/daily/
+*.db
+*.db-wal
+*.db-shm

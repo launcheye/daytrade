@@ -198,3 +198,50 @@ def test_illiquid_coin_is_rejected():
     screening = screener.screen_one("THINUSDT", tick, book, candles)
     assert not screening.approved
     assert screening.rejections
+
+
+# --- observatory: still paper-only -----------------------------------------
+
+def test_no_wallet_code_exists():
+    """No function connects, links, or imports a crypto wallet."""
+    import re
+    from pathlib import Path
+
+    src = Path(__file__).resolve().parents[1] / "src" / "daytrade"
+    forbidden = re.compile(
+        r"def\s+(connect_wallet|link_wallet|wallet_connect|import_wallet|"
+        r"unlock_wallet|sign_transaction|broadcast_tx)\w*\s*\(",
+        re.IGNORECASE)
+    offenders = []
+    for path in src.rglob("*.py"):
+        for lineno, line in enumerate(path.read_text().splitlines(), 1):
+            if forbidden.search(line):
+                offenders.append(f"{path.name}:{lineno}")
+    assert not offenders, f"wallet code found: {offenders}"
+
+
+def test_observatory_observer_places_no_real_orders():
+    """The observer's broker path is simulation only — connect_live raises."""
+    from daytrade.paper import PaperBroker
+    broker = PaperBroker(10_000.0)
+    with pytest.raises(NotImplementedError):
+        broker.connect_live()
+
+
+def test_dashboard_reports_paper_only(tmp_path):
+    """The dashboard health endpoint asserts paper-only, no real trading."""
+    from fastapi.testclient import TestClient
+    from daytrade.dashboard import create_app
+
+    client = TestClient(create_app(tmp_path / "obs.db"))
+    body = client.get("/api/health").json()
+    assert body["real_trading"] is False
+    assert body["paper_only"] is True
+
+
+def test_observatory_has_no_live_order_method():
+    """The observer exposes no order-entry-to-a-real-exchange method."""
+    from daytrade.observatory import Observer
+    forbidden = {"place_order", "submit_live_order", "send_order",
+                 "connect_wallet", "withdraw"}
+    assert forbidden.isdisjoint(dir(Observer))

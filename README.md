@@ -53,7 +53,16 @@ trading-bot approve       # decide a trade and require manual CLI approval
 trading-bot accounting    # accounting report (+ optional tax CSV export)
 trading-bot daily-report  # end-of-session operations report
 trading-bot sandbox-check # verify sandbox setup; prove real execution off
+
+# 24/7 Market Safety Observatory
+trading-bot observe --interval 300   # run the continuous observer (Ctrl+C to stop)
+trading-bot dashboard                # launch the visual dashboard (FastAPI + web UI)
+trading-bot status                   # show observatory status
+trading-bot report-daily             # generate today's daily report
+trading-bot watchlist-check          # screen configs/watchlist.yaml
 ```
+
+`make observe`, `make dashboard` and `make test` are also provided.
 
 By default everything runs **offline** against a deterministic mock exchange.
 Set `DAYTRADE_ALLOW_NETWORK=true` to allow read-only public market-data calls.
@@ -75,6 +84,30 @@ sandbox-trades** — it never places real orders or moves money.
 - **Risk controls** — per-coin position cap, daily & weekly loss limits,
   max open positions, post-loss cooldown, plus spread/liquidity/chop and
   confidence gates.
+
+## Market Safety Observatory
+
+`trading-bot observe` runs **forever** (until Ctrl+C). Each cycle it fetches
+data, runs every analysis (technical, microstructure, volatility, trend,
+chop, liquidity, regime/panic), paper-simulates trades, stores every
+prediction, and later compares predictions to what actually happened. It is
+crash-recovering and restart-safe — all state lives in a SQLite database
+(`artifacts/observatory.db`); logs go to `logs/daytrade.log`.
+
+`trading-bot dashboard` opens a visual dashboard (default
+`http://127.0.0.1:8000`) with a giant **MARKET STATUS** card, a
+safety-score timeline, a per-symbol table, prediction-accuracy analytics, a
+paper-trading view and a risk console — live via WebSocket.
+
+The **Market Safety Score** (0-100) summarizes conditions as
+`SAFE_TO_OBSERVE` / `WAIT` / `HIGH_RISK` / `UNSAFE`, with a market condition
+of `CALM` / `OPPORTUNISTIC` / `MIXED` / `CHOPPY` / `PANIC` / `ILLIQUID` /
+`OVEREXTENDED`. It describes *observation conditions for this paper
+strategy* — never investment advice.
+
+It is a market **training simulator and safety dashboard**: it monitors many
+pairs, learns which regimes it predicts well, flags when its confidence is
+"fake", and only ever paper-trades.
 
 ## Project layout
 
@@ -98,6 +131,8 @@ sandbox-trades** — it never places real orders or moves money.
 | `src/daytrade/accounting` | Accounting report + tax-CSV export (no transfers) |
 | `src/daytrade/backtest` | Backtesting / simulation engine |
 | `src/daytrade/reporting` | Console / JSON / Markdown + daily reports |
+| `src/daytrade/observatory` | 24/7 observer, SQLite store, safety score, alerts |
+| `src/daytrade/dashboard` | FastAPI backend + single-page visual dashboard |
 | `src/daytrade/cli` | `trading-bot` command line interface |
 | `daytrade/exchanges/sandbox.py` | Testnet-only execution (URL-allowlisted) |
 | `daytrade/exchanges/credentials.py` | API-key loading + withdrawal-key rejection |

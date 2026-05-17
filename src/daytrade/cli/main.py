@@ -57,10 +57,18 @@ from ..reporting import (
     save_json,
     save_text,
 )
+from ..observatory import LiveMockFeed, Observer, ObservatoryDB, write_daily_report
+from ..observatory.database import DEFAULT_DB_PATH
+from ..observatory.prediction_tracker import build_prediction_memory
 from ..runtime import apply_runtime, get_logger
 from ..safety.guard import forbid_real_trading
 from ..validation import walk_forward_validate
-from ..watchlist import WatchlistScreener, build_mock_universe, demo_universe_symbols
+from ..watchlist import (
+    WatchlistScreener,
+    build_mock_universe,
+    demo_universe_symbols,
+    load_watchlist_config,
+)
 
 app = typer.Typer(
     add_completion=False,
@@ -449,6 +457,135 @@ def sandbox_check(
     _console.print(Panel("\n".join(f"✓ {p}" for p in proof),
                          title="Real execution is structurally disabled",
                          border_style="green"))
+
+
+@app.command()
+def observe(
+    profile: Optional[str] = typer.Option(None, help="Config profile."),
+    interval: int = typer.Option(300, help="Seconds between observation cycles."),
+) -> None:
+    """Run the 24/7 Market Safety Observer (Ctrl+C to stop).
+
+    Each cycle fetches data, runs every analysis, paper-simulates, stores
+    predictions, evaluates older predictions against reality, and scores
+    market safety. Observation / paper simulation only — no real orders.
+    """
+    cfg = _setup(profile)
+    _console.rule("[bold]daytrade — Market Safety Observer")
+    _console.print("Paper / simulation only. No real orders, wallets, or "
+                    "money movement. Press Ctrl+C to stop.\n")
+
+    model = None
+    model_path = _MODELS / "model.pkl"
+    if model_path.exists():
+        try:
+            model = PredictiveModel.load(model_path)
+            _console.print(f"Loaded ML model: {model.version}")
+        except Exception as exc:  # noqa: BLE001
+            _console.print(f"[yellow]ML model not loaded:[/yellow] {exc}")
+
+    observer = Observer(cfg, load_watchlist_config(),
+                        db=ObservatoryDB(), feed=LiveMockFeed(), model=model)
+    _console.print(f"Observing {len(observer.watchlist_config.symbols)} symbols "
+                    f"every {interval}s. Database: {DEFAULT_DB_PATH}")
+    observer.run_forever(interval)
+    _console.print("\n[green]Observer stopped cleanly.[/green]")
+
+
+@app.command()
+def dashboard(
+    host: str = typer.Option("127.0.0.1", help="Bind host."),
+    port: int = typer.Option(8000, help="Bind port."),
+) -> None:
+    """Launch the visual Market Safety dashboard (FastAPI + web UI)."""
+    import uvicorn
+    _console.rule("[bold]daytrade — Market Safety Dashboard")
+    _console.print(f"Dashboard: [bold]http://{host}:{port}[/bold]  "
+                    f"(reads {DEFAULT_DB_PATH})")
+    _console.print("Read-only observatory view. Ctrl+C to stop.\n")
+    uvicorn.run("daytrade.dashboard.app:app", host=host, port=port,
+                log_level="warning")
+
+
+@app.command("report-daily")
+def report_daily(
+    day: Optional[str] = typer.Option(None, help="Day YYYY-MM-DD (default: today)."),
+) -> None:
+    """Generate the daily observatory markdown report."""
+    _setup(None)
+    db = ObservatoryDB()
+    path = write_daily_report(db, day)
+    db.close()
+    _console.print(f"[green]Daily report written[/green] -> {path}")
+    _console.print(path.read_text(encoding="utf-8"))
+
+
+@app.command()
+def status() -> None:
+    """Show the current observatory status (bot, safety score, counts)."""
+    _setup(None)
+    db = ObservatoryDB()
+    run = db.current_bot_run()
+    safety = db.latest_safety_score()
+    memory = build_prediction_memory(db.outcomes(limit=5000))
+
+    table = Table(title="Observatory status", header_style="bold", show_header=False)
+    table.add_column("k", style="bold")
+    table.add_column("v")
+    if run:
+        from datetime import datetime, timezone
+        live = run["status"] == "running"
+        table.add_row("Bot", ("RUNNING" if live else run["status"].upper())
+                      + f" (run #{run['id']}, {run['cycles']} cycles)")
+        table.add_row("Last heartbeat", str(run.get("last_heartbeat_ts")))
+    else:
+        table.add_row("Bot", "never started — run 'trading-bot observe'")
+    if safety:
+        table.add_row("Market safety score", f"{safety['score']}/100")
+        table.add_row("Status / condition",
+                      f"{safety['status']} / {safety['condition']}")
+    table.add_row("Snapshots stored", str(db.count("market_snapshots")))
+    table.add_row("Predictions stored", str(db.count("predictions")))
+    table.add_row("Predictions evaluated", str(memory.total))
+    table.add_row("Prediction accuracy",
+                  f"{memory.overall_accuracy * 100:.0f}% "
+                  f"({'reliable' if memory.is_reliable else 'UNRELIABLE'})")
+    table.add_row("Paper trades closed", str(db.count("paper_trades")))
+    _console.print(table)
+    db.close()
+
+
+@app.command("watchlist-check")
+def watchlist_check() -> None:
+    """Screen the configs/watchlist.yaml symbols for liquidity / quality."""
+    from datetime import datetime, timezone
+    _setup(None)
+    _console.rule("[bold]daytrade — watchlist check")
+    wl = load_watchlist_config()
+    feed = LiveMockFeed()
+    now = datetime.now(timezone.utc)
+    screener = WatchlistScreener(wl)
+
+    table = Table(title="Watchlist screening", header_style="bold")
+    for col in ("Symbol", "Status", "Price", "24h volume", "Spread",
+                "Book notional"):
+        table.add_column(col)
+    approved = 0
+    for symbol in wl.symbols:
+        tick = feed.tick_at(symbol, now)
+        book = feed.orderbook_at(symbol, now)
+        candles = feed.candles_at(symbol, now, n_bars=120)
+        r = screener.screen_one(symbol, tick, book, candles)
+        approved += int(r.approved)
+        style = "green" if r.approved else "red"
+        m = r.metrics
+        table.add_row(symbol, f"[{style}]{r.status}[/{style}]",
+                      f"{m.price:,.4f}", f"${m.volume_24h_usd:,.0f}",
+                      f"{m.spread_bps:.1f} bps", f"${m.book_notional_usd:,.0f}")
+        if not r.approved:
+            _console.print(f"[red]{symbol}:[/red] " + "; ".join(r.rejections))
+    _console.print(table)
+    _console.print(f"{approved}/{len(wl.symbols)} symbols cleared the filters.")
 
 
 if __name__ == "__main__":  # pragma: no cover
