@@ -294,6 +294,13 @@ const BADGE={ 'GOOD PAPER CONDITIONS':'#00A651','WATCH ONLY':null,
 let charts={};
 const fmt=(n,d=2)=>(n==null||isNaN(n))?'—':Number(n).toLocaleString(undefined,{maximumFractionDigits:d});
 const pct=n=>(n==null||isNaN(n))?'—':Number(n).toFixed(1)+'%';
+// API timestamps are UTC ISO strings — render them in the viewer's local timezone.
+const _ld=ts=>{ if(!ts) return null; let s=String(ts);
+  if(s.includes('T')&&!/(Z|[+-]\d\d:?\d\d)$/.test(s)) s+='Z';
+  const d=new Date(s); return isNaN(d)?null:d; };
+const tHMS=ts=>{ const d=_ld(ts); return d?d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'}):''; };
+const tHM=ts=>{ const d=_ld(ts); return d?d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}):''; };
+const tMD=ts=>{ const d=_ld(ts); return d?d.toLocaleString([],{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}):''; };
 async function api(p){ try{ return await (await fetch(p)).json(); }catch(e){ return {error:String(e)}; } }
 function chart(id){ if(!charts[id]){ const el=document.getElementById(id); if(el) charts[id]=echarts.init(el); } return charts[id]; }
 // Theme-aware chart colours (read from CSS variables on demand).
@@ -354,7 +361,7 @@ async function renderEquity(){
   const p=eq.points||[], t=tc();
   chart('equityChart').setOption({ backgroundColor:'transparent',
     grid:{left:62,right:16,top:14,bottom:26},
-    xAxis:{type:'category',data:p.map(x=>(x.ts||'').slice(5,16)),
+    xAxis:{type:'category',data:p.map(x=>tMD(x.ts)),
       axisLabel:{color:t.axis,fontSize:10},axisLine:{lineStyle:{color:t.grid}}},
     yAxis:{type:'value',scale:true,axisLabel:{color:t.axis,formatter:v=>'$'+v},
       splitLine:{lineStyle:{color:t.grid}}},
@@ -380,7 +387,7 @@ async function renderOverview(){
   const h=await api('/api/safety-history'), t=tc();
   if(Array.isArray(h)) chart('safetyChart').setOption({backgroundColor:'transparent',
     grid:{left:36,right:14,top:12,bottom:24},
-    xAxis:{type:'category',data:h.map(x=>(x.ts||'').slice(11,16)),axisLabel:{color:t.axis,fontSize:10}},
+    xAxis:{type:'category',data:h.map(x=>tHM(x.ts)),axisLabel:{color:t.axis,fontSize:10}},
     yAxis:{type:'value',min:0,max:100,axisLabel:{color:t.axis},splitLine:{lineStyle:{color:t.grid}}},
     tooltip:{trigger:'axis'},series:[{type:'line',smooth:true,symbol:'none',data:h.map(x=>x.score),
       lineStyle:{color:'#0081C8',width:2},areaStyle:{color:'rgba(0,129,200,0.16)'}}]});
@@ -388,7 +395,7 @@ async function renderOverview(){
   if(Array.isArray(act)){
     const c={info:'var(--dim)',warning:'var(--yellow)',critical:'var(--red)'};
     document.getElementById('activityFeed').innerHTML=act.map(e=>
-      '<div><span style="color:var(--faint)">'+(e.ts||'').slice(11,19)+'</span> '+
+      '<div><span style="color:var(--faint)">'+tHMS(e.ts)+'</span> '+
       '<span style="color:'+(c[e.level]||'var(--dim)')+'">'+e.event+'</span>'+
       (e.detail?' <span style="color:var(--faint)">— '+e.detail+'</span>':'')+'</div>').join('')
       ||'<span style="color:var(--dim)">No activity yet — start the bot.</span>';
@@ -527,9 +534,9 @@ async function openDetail(symbol){
   const d=await api('/api/symbols/'+symbol); if(!d||d.error) return;
   document.getElementById('symbolDetail').classList.remove('hidden');
   document.getElementById('detailTitle').textContent=symbol+' — detail';
-  const s=d.series||[],x=s.map(p=>(p.ts||'').slice(11,16)),t=tc();
+  const s=d.series||[],x=s.map(p=>tHM(p.ts)),t=tc();
   const preds=(d.predictions||[]).filter(p=>p.direction!=='hold').map(p=>({
-    xAxis:(p.ts||'').slice(11,16),label:{formatter:p.direction==='buy'?'B':'S'}}));
+    xAxis:tHM(p.ts),label:{formatter:p.direction==='buy'?'B':'S'}}));
   chart('detailPrice').setOption({backgroundColor:'transparent',grid:{left:54,right:14,top:12,bottom:24},
     xAxis:{type:'category',data:x,axisLabel:{color:t.axis,fontSize:9}},
     yAxis:{type:'value',scale:true,axisLabel:{color:t.axis},splitLine:{lineStyle:{color:t.grid}}},
@@ -548,7 +555,7 @@ async function openDetail(symbol){
     fmt(h.safety_score,0)+' · '+(h.status||'—');
   document.getElementById('detailPreds').innerHTML=(d.predictions||[]).slice(0,40).map(p=>
     '<div class="py-0.5" style="border-bottom:1px solid var(--line2)"><span style="color:var(--faint)">'+
-    (p.ts||'').slice(11,16)+'</span> '+(p.direction||'').toUpperCase()+' '+
+    tHM(p.ts)+'</span> '+(p.direction||'').toUpperCase()+' '+
     fmt((p.confidence||0)*100,0)+'% · '+(p.condition||'')+'</div>').join('')||'—';
   const tr=(d.paper_trades||{}).closed||[];
   document.getElementById('detailTrades').innerHTML=tr.slice(0,40).map(t2=>{
@@ -564,7 +571,7 @@ async function renderRegimes(){
   const r=await api('/api/regimes'); if(!r||r.error) return;
   const tl=r.timeline||[],t=tc();
   chart('regimeChart').setOption({backgroundColor:'transparent',grid:{left:36,right:14,top:12,bottom:24},
-    xAxis:{type:'category',data:tl.map(x=>(x.ts||'').slice(5,16)),axisLabel:{color:t.axis,fontSize:9}},
+    xAxis:{type:'category',data:tl.map(x=>tMD(x.ts)),axisLabel:{color:t.axis,fontSize:9}},
     yAxis:{type:'value',min:0,max:100,axisLabel:{color:t.axis},splitLine:{lineStyle:{color:t.grid}}},
     tooltip:{trigger:'axis'},series:[{type:'line',step:'middle',symbol:'none',data:tl.map(x=>x.safety_score),
       lineStyle:{color:'#0081C8'},areaStyle:{color:'rgba(0,129,200,0.16)'}}]});
@@ -653,7 +660,7 @@ async function renderRisk(){
     '<div class="py-0.5">• <b>'+s.symbol+'</b> — '+s.status+'</div>').join('')
     ||'<span style="color:var(--dim)">No symbols skipped.</span>';
   document.getElementById('riskErrors').innerHTML=(r.errors||[]).slice(0,20).map(e=>
-    '<div class="py-0.5"><span style="color:var(--faint)">'+(e.ts||'').slice(11,19)+'</span> '+
+    '<div class="py-0.5"><span style="color:var(--faint)">'+tHMS(e.ts)+'</span> '+
     '<span style="color:var(--dim)">['+e.context+']</span> '+e.message+'</div>').join('')
     ||'<span style="color:var(--dim)">No errors logged.</span>';
 }

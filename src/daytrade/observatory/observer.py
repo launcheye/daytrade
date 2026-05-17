@@ -25,6 +25,7 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 from ..config.schema import AppConfig
+from ..exchanges.base import ExchangeError
 from ..models import Action, Side
 from ..pipeline import AnalysisPipeline
 from ..risk import RiskEngine, position_size
@@ -336,7 +337,14 @@ class Observer:
         """Score every matured-but-unevaluated prediction against reality."""
         evaluated = 0
         for prediction in self.db.unevaluated_predictions():
-            outcome, fully = evaluate_prediction(prediction, self.feed, now)
+            try:
+                outcome, fully = evaluate_prediction(prediction, self.feed, now)
+            except ExchangeError as exc:
+                # A missing kline (data gap, delisted pair) must not crash the
+                # whole cycle — skip this prediction and retry it next cycle.
+                _log.warning("skipped prediction %s — no market data: %s",
+                             prediction.get("id"), exc)
+                continue
             if outcome is None:
                 continue
             self.db.upsert_outcome(prediction["id"], **outcome)
