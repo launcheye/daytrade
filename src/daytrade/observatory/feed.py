@@ -44,16 +44,45 @@ class SymbolProfile:
     noise: float            # per-minute random amplitude
 
 
-# Eight watchlist majors, each with a deliberately different character.
+# The ~35 most-liquid Binance USDT spot pairs, each with a deliberately
+# distinct character (calm majors -> volatile alts). base_quantity is scaled
+# so each book clears the watchlist liquidity filter.
 _PROFILES: Dict[str, SymbolProfile] = {
-    "BTCUSDT":  SymbolProfile(62_000.0, 2.4e10, 2.0, 1.2, 20, 0.020, 0.008, 0.0020, 0.0009),
-    "ETHUSDT":  SymbolProfile(3_050.0, 1.1e10, 2.5, 22.0, 20, 0.024, 0.010, 0.0030, 0.0012),
-    "SOLUSDT":  SymbolProfile(152.0, 3.2e9, 3.5, 430.0, 20, 0.030, 0.014, 0.0060, 0.0020),
-    "BNBUSDT":  SymbolProfile(585.0, 9.0e8, 3.0, 120.0, 20, 0.016, 0.006, 0.0018, 0.0008),
-    "XRPUSDT":  SymbolProfile(0.62, 8.0e8, 4.0, 1.1e5, 20, 0.018, 0.020, 0.0140, 0.0030),
-    "DOGEUSDT": SymbolProfile(0.155, 7.0e8, 5.0, 4.5e5, 20, 0.040, 0.028, 0.0180, 0.0050),
-    "AVAXUSDT": SymbolProfile(36.0, 4.0e8, 4.5, 1900.0, 20, 0.034, 0.018, 0.0090, 0.0030),
-    "LINKUSDT": SymbolProfile(18.5, 3.5e8, 4.0, 3600.0, 20, 0.022, 0.012, 0.0050, 0.0018),
+    "BTCUSDT":   SymbolProfile(62_000.0, 2.4e10, 2.0, 1.2, 20, 0.020, 0.008, 0.0020, 0.0009),
+    "ETHUSDT":   SymbolProfile(3_050.0, 1.1e10, 2.5, 22.0, 20, 0.024, 0.010, 0.0030, 0.0012),
+    "SOLUSDT":   SymbolProfile(152.0, 3.2e9, 3.5, 430.0, 20, 0.030, 0.014, 0.0060, 0.0020),
+    "BNBUSDT":   SymbolProfile(585.0, 9.0e8, 3.0, 120.0, 20, 0.016, 0.006, 0.0018, 0.0008),
+    "XRPUSDT":   SymbolProfile(0.62, 8.0e8, 4.0, 1.10e5, 20, 0.018, 0.020, 0.0140, 0.0030),
+    "DOGEUSDT":  SymbolProfile(0.155, 7.0e8, 5.0, 4.50e5, 20, 0.040, 0.028, 0.0180, 0.0050),
+    "AVAXUSDT":  SymbolProfile(36.0, 4.0e8, 4.5, 1900.0, 20, 0.034, 0.018, 0.0090, 0.0030),
+    "LINKUSDT":  SymbolProfile(18.5, 3.5e8, 4.0, 3600.0, 20, 0.022, 0.012, 0.0050, 0.0018),
+    "ADAUSDT":   SymbolProfile(0.45, 6.0e8, 4.0, 1.55e5, 20, 0.026, 0.016, 0.0080, 0.0024),
+    "DOTUSDT":   SymbolProfile(6.2, 3.0e8, 4.0, 1.10e4, 20, 0.026, 0.014, 0.0070, 0.0022),
+    "MATICUSDT": SymbolProfile(0.52, 2.8e8, 4.5, 1.35e5, 20, 0.030, 0.018, 0.0100, 0.0028),
+    "LTCUSDT":   SymbolProfile(88.0, 3.2e8, 3.5, 800.0, 20, 0.020, 0.010, 0.0040, 0.0014),
+    "TRXUSDT":   SymbolProfile(0.13, 2.5e8, 4.0, 5.40e5, 20, 0.014, 0.008, 0.0030, 0.0010),
+    "ATOMUSDT":  SymbolProfile(7.8, 2.0e8, 4.5, 9000.0, 20, 0.028, 0.016, 0.0080, 0.0026),
+    "UNIUSDT":   SymbolProfile(9.4, 2.2e8, 4.0, 7400.0, 20, 0.026, 0.015, 0.0075, 0.0024),
+    "NEARUSDT":  SymbolProfile(5.1, 2.4e8, 4.5, 1.37e4, 20, 0.034, 0.020, 0.0110, 0.0032),
+    "APTUSDT":   SymbolProfile(9.0, 1.9e8, 5.0, 7800.0, 20, 0.036, 0.022, 0.0120, 0.0034),
+    "ARBUSDT":   SymbolProfile(0.90, 2.6e8, 5.0, 7.80e4, 20, 0.038, 0.024, 0.0130, 0.0036),
+    "OPUSDT":    SymbolProfile(1.70, 2.1e8, 5.0, 4.10e4, 20, 0.036, 0.022, 0.0125, 0.0034),
+    "INJUSDT":   SymbolProfile(22.0, 1.8e8, 5.5, 3200.0, 20, 0.042, 0.026, 0.0150, 0.0040),
+    "FILUSDT":   SymbolProfile(4.6, 1.6e8, 5.0, 1.52e4, 20, 0.032, 0.020, 0.0100, 0.0030),
+    "ETCUSDT":   SymbolProfile(26.0, 2.0e8, 4.5, 2700.0, 20, 0.024, 0.013, 0.0060, 0.0020),
+    "XLMUSDT":   SymbolProfile(0.11, 1.5e8, 4.5, 6.40e5, 20, 0.020, 0.014, 0.0070, 0.0022),
+    "ICPUSDT":   SymbolProfile(11.0, 1.7e8, 5.5, 6400.0, 20, 0.038, 0.024, 0.0130, 0.0036),
+    "HBARUSDT":  SymbolProfile(0.085, 1.4e8, 5.0, 8.20e5, 20, 0.028, 0.018, 0.0095, 0.0028),
+    "VETUSDT":   SymbolProfile(0.035, 1.3e8, 5.0, 2.00e6, 20, 0.026, 0.017, 0.0090, 0.0026),
+    "ALGOUSDT":  SymbolProfile(0.18, 1.3e8, 5.0, 3.90e5, 20, 0.024, 0.016, 0.0085, 0.0025),
+    "AAVEUSDT":  SymbolProfile(145.0, 1.9e8, 4.0, 480.0, 20, 0.030, 0.017, 0.0085, 0.0026),
+    "MKRUSDT":   SymbolProfile(2400.0, 1.4e8, 4.5, 29.0, 20, 0.026, 0.014, 0.0065, 0.0021),
+    "SUIUSDT":   SymbolProfile(1.40, 2.8e8, 5.0, 5.00e4, 20, 0.040, 0.025, 0.0140, 0.0038),
+    "SEIUSDT":   SymbolProfile(0.42, 1.6e8, 5.5, 1.67e5, 20, 0.044, 0.028, 0.0160, 0.0042),
+    "TIAUSDT":   SymbolProfile(6.8, 1.5e8, 5.5, 1.03e4, 20, 0.042, 0.027, 0.0150, 0.0040),
+    "RNDRUSDT":  SymbolProfile(7.2, 1.5e8, 5.0, 9700.0, 20, 0.038, 0.023, 0.0125, 0.0035),
+    "IMXUSDT":   SymbolProfile(1.50, 1.3e8, 5.5, 4.70e4, 20, 0.036, 0.022, 0.0120, 0.0034),
+    "GRTUSDT":   SymbolProfile(0.18, 1.2e8, 5.5, 3.90e5, 20, 0.030, 0.020, 0.0105, 0.0030),
 }
 
 _DEFAULT_PROFILE = SymbolProfile(25.0, 2.0e8, 5.0, 5_000.0, 20,

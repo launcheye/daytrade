@@ -7,34 +7,33 @@
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
 <style>
-  :root{ --bg:#070a11; --panel:#10151f; --line:#1f2838; --txt:#e7eaf0;
-         --dim:#7e8a9e; --accent:#5b9dff; --up:#26d98a; --down:#ff5d6c; }
+  :root{ --bg:#000000; --panel:#0e0e0e; --line:#2a2a2a; --txt:#ffffff;
+         --dim:#9a9a9a; --accent:#0081C8; --up:#00A651; --down:#EE334E;
+         --warn:#FCB131; }
   *{ box-sizing:border-box; }
-  body{ margin:0; background:
-        radial-gradient(1100px 600px at 12% -8%, #131c30 0%, transparent 55%),
-        radial-gradient(900px 500px at 100% 0%, #1a1330 0%, transparent 50%), var(--bg);
-        color:var(--txt); font-family:'Inter',ui-sans-serif,system-ui,-apple-system,sans-serif;
+  body{ margin:0; background:var(--bg);
+        color:var(--txt); font-family:'Aptos','Aptos Display','Segoe UI',ui-sans-serif,system-ui,-apple-system,sans-serif;
         -webkit-font-smoothing:antialiased; }
-  .card{ background:linear-gradient(180deg,#141b28 0%,#10151f 100%);
+  .card{ background:#0e0e0e;
          border:1px solid var(--line); border-radius:14px;
-         box-shadow:0 1px 0 rgba(255,255,255,0.03) inset, 0 8px 24px -16px rgba(0,0,0,0.8); }
+         box-shadow:0 8px 24px -16px rgba(0,0,0,0.9); }
   .lbl{ font-size:10px; letter-spacing:0.12em; text-transform:uppercase; color:var(--dim); font-weight:600; }
   .mono{ font-variant-numeric:tabular-nums; font-feature-settings:"tnum"; }
   .tab{ color:var(--dim); border:1px solid transparent; transition:all .15s; font-weight:500; }
-  .tab:hover{ color:#cfd6e2; background:#141b28; }
-  .tab-active{ background:linear-gradient(180deg,#1f2a3d,#18212f); color:#fff;
-               border-color:#2b3850; box-shadow:0 0 0 1px rgba(91,157,255,0.15); }
+  .tab:hover{ color:#ffffff; background:#1a1a1a; }
+  .tab-active{ background:#1a1a1a; color:#fff;
+               border-color:var(--accent); box-shadow:0 0 0 1px rgba(0,129,200,0.4); }
   table{ border-collapse:collapse; width:100%; }
   th,td{ padding:8px 12px; text-align:left; font-size:13px; }
   th{ color:var(--dim); border-bottom:1px solid var(--line); font-weight:600;
       text-transform:uppercase; font-size:10px; letter-spacing:0.07em; }
-  td{ border-bottom:1px solid #11161f; }
-  tr.clk:hover{ background:#161d2b; cursor:pointer; }
+  td{ border-bottom:1px solid #1a1a1a; }
+  tr.clk:hover{ background:#1a1a1a; cursor:pointer; }
   .pill{ padding:2px 9px; border-radius:999px; font-size:11px; font-weight:600; }
   ::-webkit-scrollbar{ width:9px; height:9px; }
-  ::-webkit-scrollbar-thumb{ background:#26314a; border-radius:5px; }
+  ::-webkit-scrollbar-thumb{ background:#3a3a3a; border-radius:5px; }
   ::-webkit-scrollbar-track{ background:transparent; }
-  .barwrap{ background:#0c121c; border-radius:999px; overflow:hidden; }
+  .barwrap{ background:#1a1a1a; border-radius:999px; overflow:hidden; }
 </style>
 </head>
 <body>
@@ -43,7 +42,7 @@
   <header class="flex items-center justify-between mb-4">
     <div class="flex items-center gap-3">
       <div class="w-9 h-9 rounded-xl flex items-center justify-center text-lg"
-           style="background:linear-gradient(135deg,#5b9dff,#7c5cff);">◵</div>
+           style="background:#0081C8;">◵</div>
       <div>
         <h1 class="text-[15px] font-bold tracking-tight">Paper Trading Learning Observatory</h1>
         <p class="text-[11px]" style="color:var(--dim)">30-day paper / simulation observatory · no real trading · no wallets · no money movement</p>
@@ -61,7 +60,7 @@
         <span class="opacity-30">·</span>
         <span id="conditionText" class="pill">—</span>
         <span class="opacity-30">·</span>
-        <span id="readinessChip" class="pill" style="background:#1a2233;color:#aab4c6">READINESS —</span>
+        <span id="readinessChip" class="pill" style="background:#1a1a1a;color:#9a9a9a">READINESS —</span>
       </div>
       <div id="reasonText" class="text-xs mt-2.5" style="color:var(--dim)">—</div>
     </div>
@@ -136,7 +135,7 @@
     </div>
     <div class="card p-4 mb-4">
       <div class="lbl mb-2">Learning progress</div>
-      <div class="barwrap h-3.5"><div id="pgBar" class="h-3.5" style="width:0%;background:linear-gradient(90deg,#5b9dff,#7c5cff)"></div></div>
+      <div class="barwrap h-3.5"><div id="pgBar" class="h-3.5" style="width:0%;background:linear-gradient(90deg,#0081C8,#00A651)"></div></div>
       <div id="pgBarLabel" class="text-xs mt-1.5" style="color:var(--dim)"></div>
     </div>
     <div class="card p-4">
@@ -168,9 +167,9 @@
       </div>
       <div id="detailMeta" class="text-xs mt-2" style="color:var(--dim)"></div>
       <div class="grid lg:grid-cols-2 gap-4 mt-3">
-        <div class="card p-3" style="background:#0e1420"><div class="lbl mb-1">Prediction history</div>
+        <div class="card p-3" style="background:#0a0a0a"><div class="lbl mb-1">Prediction history</div>
           <div id="detailPreds" class="text-xs max-h-48 overflow-y-auto"></div></div>
-        <div class="card p-3" style="background:#0e1420"><div class="lbl mb-1">Paper trade history</div>
+        <div class="card p-3" style="background:#0a0a0a"><div class="lbl mb-1">Paper trade history</div>
           <div id="detailTrades" class="text-xs max-h-48 overflow-y-auto"></div></div>
       </div>
     </div>
@@ -190,9 +189,9 @@
     <div class="card p-4 mb-4 overflow-x-auto">
       <table><thead><tr><th>Confidence bucket</th><th>Samples</th><th>Stated</th><th>Actual accuracy</th><th>Gap</th><th>Flag</th></tr></thead>
       <tbody id="calibRows"></tbody></table></div>
-    <div class="card p-4" style="border-color:#3a3414">
-      <div class="text-sm font-semibold mb-1" style="color:#e8c34a">⚠ Notice</div>
-      <div id="calibWarnings" class="text-xs" style="color:#d9c98a"></div></div>
+    <div class="card p-4" style="border-color:#2a2a2a">
+      <div class="text-sm font-semibold mb-1" style="color:#FCB131">⚠ Notice</div>
+      <div id="calibWarnings" class="text-xs" style="color:#FCB131"></div></div>
   </section>
 
   <section id="tab-accuracy" class="tab-panel hidden">
@@ -205,8 +204,8 @@
       <div class="card p-4"><div class="lbl mb-2">Accuracy by symbol</div><div id="accBySymbol" class="text-[13px]"></div></div>
       <div class="card p-4"><div class="lbl mb-2">Accuracy by regime</div><div id="accByRegime" class="text-[13px]"></div></div>
     </div>
-    <div class="card p-4 mt-4" style="border-color:#3a3414">
-      <div class="text-sm font-semibold mb-1" style="color:#e8c34a">⚠ False-confidence warnings</div>
+    <div class="card p-4 mt-4" style="border-color:#2a2a2a">
+      <div class="text-sm font-semibold mb-1" style="color:#FCB131">⚠ False-confidence warnings</div>
       <div id="accWarnings" class="text-xs"></div></div>
   </section>
 
@@ -227,25 +226,25 @@
   <section id="tab-risk" class="tab-panel hidden">
     <div class="grid md:grid-cols-3 gap-4 mb-4">
       <div class="card p-4"><div class="text-sm font-semibold mb-2" style="color:var(--down)">Panic / illiquid / choppy</div><div id="riskHazards" class="text-xs"></div></div>
-      <div class="card p-4"><div class="text-sm font-semibold mb-2" style="color:#e8c34a">Model degradation</div><div id="riskModel" class="text-xs"></div></div>
-      <div class="card p-4"><div class="text-sm font-semibold mb-2" style="color:#f0934a">Skipped symbols</div><div id="riskSkipped" class="text-xs"></div></div>
+      <div class="card p-4"><div class="text-sm font-semibold mb-2" style="color:#FCB131">Model degradation</div><div id="riskModel" class="text-xs"></div></div>
+      <div class="card p-4"><div class="text-sm font-semibold mb-2" style="color:#FCB131">Skipped symbols</div><div id="riskSkipped" class="text-xs"></div></div>
     </div>
     <div class="card p-4"><div class="lbl mb-2">Recent alerts & errors</div><div id="riskErrors" class="text-xs"></div></div>
   </section>
 
-  <footer class="text-center text-[11px] mt-6" style="color:#4b566b">
+  <footer class="text-center text-[11px] mt-6" style="color:#6a6a6a">
     daytrade · paper / simulation only · no real trading · no wallets · no bank transfers ·
     conditions analysis, never financial advice · <span id="updated"></span>
   </footer>
 </div>
 
 <script>
-const SC={ SAFE_TO_OBSERVE:['#0c2a1f','#26d98a'], WAIT:['#2c2510','#e8c34a'],
-  HIGH_RISK:['#321a0d','#f0934a'], UNSAFE:['#2e1013','#ff5d6c'] };
-const BADGE={ 'GOOD PAPER CONDITIONS':['#0e3326','#3ee0a0'],'WATCH ONLY':['#1e2738','#9aa6b8'],
-  'TOO CHOPPY':['#3a2410','#f0a85a'],'TOO ILLIQUID':['#3a2410','#f0a85a'],
-  'PANIC':['#3a1115','#ff7782'],'MODEL UNRELIABLE':['#3a1115','#ff7782'],
-  'COOLDOWN':['#1e2738','#9aa6b8'] };
+const SC={ SAFE_TO_OBSERVE:['#06150d','#00A651'], WAIT:['#04141f','#0081C8'],
+  HIGH_RISK:['#1c1604','#FCB131'], UNSAFE:['#1c060a','#EE334E'] };
+const BADGE={ 'GOOD PAPER CONDITIONS':['#06150d','#00A651'],'WATCH ONLY':['#1a1a1a','#ffffff'],
+  'TOO CHOPPY':['#1c1604','#FCB131'],'TOO ILLIQUID':['#1c1604','#FCB131'],
+  'PANIC':['#1c060a','#EE334E'],'MODEL UNRELIABLE':['#1c060a','#EE334E'],
+  'COOLDOWN':['#1a1a1a','#ffffff'] };
 let charts={};
 const fmt=(n,d=2)=>(n==null||isNaN(n))?'—':Number(n).toLocaleString(undefined,{maximumFractionDigits:d});
 const pct=n=>(n==null||isNaN(n))?'—':Number(n).toFixed(1)+'%';
@@ -293,7 +292,7 @@ function renderTop(o,pr,rd,eq){
 
 async function renderEquity(){
   const eq=await api('/api/equity'); if(!eq||eq.error) return;
-  const up=eq.total_gain>=0, col=up?'#26d98a':'#ff5d6c';
+  const up=eq.total_gain>=0, col=up?'#00A651':'#EE334E';
   const gb=document.getElementById('gainBig');
   gb.textContent=(up?'+$':'-$')+fmt(Math.abs(eq.total_gain),2); gb.style.color=col;
   const gp=document.getElementById('gainPctBig');
@@ -307,15 +306,15 @@ async function renderEquity(){
   chart('equityChart').setOption({ backgroundColor:'transparent',
     grid:{left:62,right:16,top:14,bottom:26},
     xAxis:{type:'category',data:p.map(x=>(x.ts||'').slice(5,16)),
-      axisLabel:{color:'#5c6a82',fontSize:10},axisLine:{lineStyle:{color:'#26314a'}}},
-    yAxis:{type:'value',scale:true,axisLabel:{color:'#5c6a82',formatter:v=>'$'+v},
-      splitLine:{lineStyle:{color:'#161d2b'}}},
+      axisLabel:{color:'#9a9a9a',fontSize:10},axisLine:{lineStyle:{color:'#3a3a3a'}}},
+    yAxis:{type:'value',scale:true,axisLabel:{color:'#9a9a9a',formatter:v=>'$'+v},
+      splitLine:{lineStyle:{color:'#1a1a1a'}}},
     tooltip:{trigger:'axis',valueFormatter:v=>'$'+fmt(v,2)},
     series:[{type:'line',smooth:true,symbol:'none',data:p.map(x=>x.equity),
       lineStyle:{color:col,width:2.5},
       markLine:{symbol:'none',data:[{yAxis:eq.starting_cash,
-        lineStyle:{color:'#3a455e',type:'dashed'},
-        label:{formatter:'start',color:'#5c6a82'}}]},
+        lineStyle:{color:'#5a5a5a',type:'dashed'},
+        label:{formatter:'start',color:'#9a9a9a'}}]},
       areaStyle:{color:new echarts.graphic.LinearGradient(0,0,0,1,
         [{offset:0,color:col+'55'},{offset:1,color:col+'02'}])}}]});
 }
@@ -324,7 +323,7 @@ async function renderOverview(){
   renderEquity();
   const o=await api('/api/overview');
   if(o&&!o.error){
-    const mini=s=>'<div class="flex justify-between py-1.5" style="border-bottom:1px solid #161d2b">'+
+    const mini=s=>'<div class="flex justify-between py-1.5" style="border-bottom:1px solid #1a1a1a">'+
       '<span class="font-semibold">'+s.symbol+'</span>'+
       '<span class="mono">'+fmt(s.safety_score,0)+' · <span style="color:var(--dim)">'+s.status+'</span></span></div>';
     document.getElementById('bestSymbols').innerHTML=(o.best_symbols||[]).map(mini).join('')||'—';
@@ -333,17 +332,17 @@ async function renderOverview(){
   const h=await api('/api/safety-history');
   if(Array.isArray(h)) chart('safetyChart').setOption({backgroundColor:'transparent',
     grid:{left:36,right:14,top:12,bottom:24},
-    xAxis:{type:'category',data:h.map(x=>(x.ts||'').slice(11,16)),axisLabel:{color:'#5c6a82',fontSize:10}},
-    yAxis:{type:'value',min:0,max:100,axisLabel:{color:'#5c6a82'},splitLine:{lineStyle:{color:'#161d2b'}}},
+    xAxis:{type:'category',data:h.map(x=>(x.ts||'').slice(11,16)),axisLabel:{color:'#9a9a9a',fontSize:10}},
+    yAxis:{type:'value',min:0,max:100,axisLabel:{color:'#9a9a9a'},splitLine:{lineStyle:{color:'#1a1a1a'}}},
     tooltip:{trigger:'axis'},series:[{type:'line',smooth:true,symbol:'none',data:h.map(x=>x.score),
-      lineStyle:{color:'#5b9dff',width:2},areaStyle:{color:'rgba(91,157,255,0.12)'}}]});
+      lineStyle:{color:'#0081C8',width:2},areaStyle:{color:'rgba(0,129,200,0.16)'}}]});
   const act=await api('/api/activity');
   if(Array.isArray(act)){
-    const c={info:'var(--dim)',warning:'#e8c34a',critical:'var(--down)'};
+    const c={info:'var(--dim)',warning:'#FCB131',critical:'var(--down)'};
     document.getElementById('activityFeed').innerHTML=act.map(e=>
-      '<div><span style="color:#4b566b">'+(e.ts||'').slice(11,19)+'</span> '+
+      '<div><span style="color:#6a6a6a">'+(e.ts||'').slice(11,19)+'</span> '+
       '<span style="color:'+(c[e.level]||'var(--dim)')+'">'+e.event+'</span>'+
-      (e.detail?' <span style="color:#4b566b">— '+e.detail+'</span>':'')+'</div>').join('')
+      (e.detail?' <span style="color:#6a6a6a">— '+e.detail+'</span>':'')+'</div>').join('')
       ||'<span style="color:var(--dim)">No activity yet — start the bot.</span>';
   }
 }
@@ -353,11 +352,11 @@ function renderNow(s){
   document.getElementById('nowPanel').innerHTML=
     '<div class="mb-2">Cycle <b class="mono">#'+(s.cycle||0)+'</b> · phase <b>'+(s.phase||'—')+'</b> · '+
     '<span style="color:'+(s.bot_running?'var(--up)':'var(--down)')+'">'+(s.bot_running?'live':'offline')+'</span></div>'+
-    '<div style="color:var(--dim)" class="mb-1.5">Symbol: <b style="color:#cfd6e2">'+(s.current_symbol||'—')+
+    '<div style="color:var(--dim)" class="mb-1.5">Symbol: <b style="color:#ffffff">'+(s.current_symbol||'—')+
     '</b> · errors this cycle: '+(s.errors_this_cycle||0)+'</div>'+
-    steps.map(st=>'<div style="color:'+(st===cur?'#5b9dff':'#4b566b')+';font-weight:'+(st===cur?'600':'400')+'">'+
+    steps.map(st=>'<div style="color:'+(st===cur?'#0081C8':'#6a6a6a')+';font-weight:'+(st===cur?'600':'400')+'">'+
       (st===cur?'▶':'·')+' '+st+'</div>').join('')+
-    '<div style="color:#4b566b" class="mt-2">Next cycle: '+((s.next_cycle_at||'—').slice(11,19))+'</div>';
+    '<div style="color:#6a6a6a" class="mt-2">Next cycle: '+((s.next_cycle_at||'—').slice(11,19))+'</div>';
 }
 
 async function renderProgress(){
@@ -371,42 +370,42 @@ async function renderProgress(){
   document.getElementById('pgBarLabel').textContent=
     fmt(p.cycles_completed,0)+' / '+fmt(p.total_expected_cycles,0)+' expected cycles · '+
     fmt(p.days_remaining,1)+' days remaining · status '+p.status;
-  const tl=p.day_timeline||[],col={green:'#26d98a',yellow:'#e8c34a',red:'#ff5d6c'};
+  const tl=p.day_timeline||[],col={green:'#00A651',yellow:'#FCB131',red:'#EE334E'};
   let cells='';
   for(let d=1;d<=(p.target_days||30);d++){
-    const m=tl.find(x=>x.day===d), c=m?col[m.status]||'#2a3343':'#161d29';
+    const m=tl.find(x=>x.day===d), c=m?col[m.status]||'#3a3a3a':'#1a1a1a';
     cells+='<div title="Day '+d+(m?': '+m.status:': upcoming')+'" style="background:'+c+
       '" class="w-9 h-9 rounded-md flex items-center justify-center text-[10px] font-bold">'+
-      '<span style="color:'+(m?'#0a0d14':'#3b455a')+'">'+d+'</span></div>';
+      '<span style="color:'+(m?'#000000':'#5a5a5a')+'">'+d+'</span></div>';
   }
   document.getElementById('dayTimeline').innerHTML=cells;
   const rd=await api('/api/readiness');
   if(rd&&!rd.error){
     const bd=Object.entries(rd.breakdown||{}).map(([k,v])=>
-      '<div class="flex justify-between py-0.5" style="border-bottom:1px solid #161d2b"><span>'+k+
+      '<div class="flex justify-between py-0.5" style="border-bottom:1px solid #1a1a1a"><span>'+k+
       '</span><span class="mono">'+fmt(v,0)+'</span></div>').join('');
     document.getElementById('readinessPanel').innerHTML=
       '<div class="text-4xl font-black mono mb-1">'+fmt(rd.score,0)+
       '<span class="text-lg" style="color:var(--dim)">/100</span></div>'+
       '<div class="text-sm font-bold mb-2.5">'+rd.level+(rd.capped?' · capped (pre day-30)':'')+'</div>'+
       '<div class="text-xs">'+bd+'</div>'+
-      (rd.blockers&&rd.blockers.length?'<div class="text-xs mt-2.5" style="color:#e8c34a">'+
+      (rd.blockers&&rd.blockers.length?'<div class="text-xs mt-2.5" style="color:#FCB131">'+
         rd.blockers.map(b=>'• '+b).join('<br>')+'</div>':'')+
-      '<div class="text-[11px] mt-2.5" style="color:#4b566b">'+(rd.notice||'')+'</div>';
+      '<div class="text-[11px] mt-2.5" style="color:#6a6a6a">'+(rd.notice||'')+'</div>';
   }
 }
 
 async function renderSymbols(){
   const rows=await api('/api/symbols'); if(!Array.isArray(rows)) return;
   document.getElementById('symbolRows').innerHTML=rows.map(r=>{
-    const bd=BADGE[r.status]||['#1e2738','#9aa6b8'];
+    const bd=BADGE[r.status]||['#1a1a1a','#9a9a9a'];
     const ti=r.trend==='up'?'<span style="color:var(--up)">▲</span>':
-      r.trend==='down'?'<span style="color:var(--down)">▼</span>':'<span style="color:#4b566b">▬</span>';
+      r.trend==='down'?'<span style="color:var(--down)">▼</span>':'<span style="color:#6a6a6a">▬</span>';
     return '<tr class="clk" onclick="openDetail(\''+r.symbol+'\')">'+
       '<td class="font-semibold">'+r.symbol+'</td><td class="mono">'+fmt(r.price,4)+'</td>'+
       '<td>'+ti+' '+r.trend+'</td><td class="mono">'+pct((r.volatility||0)*100)+'</td>'+
       '<td class="mono">$'+fmt(r.liquidity,0)+'</td><td class="mono">'+fmt(r.spread_bps,1)+'bps</td>'+
-      '<td>'+(r.chop?'<span style="color:#f0a85a">chop</span>':'<span style="color:#4b566b">no</span>')+'</td>'+
+      '<td>'+(r.chop?'<span style="color:#FCB131">chop</span>':'<span style="color:#6a6a6a">no</span>')+'</td>'+
       '<td>'+(r.prediction||'—').toUpperCase()+'</td>'+
       '<td class="mono">'+(r.confidence==null?'—':fmt(r.confidence*100,0)+'%')+'</td>'+
       '<td class="mono">'+(r.recent_accuracy==null?'—':fmt(r.recent_accuracy*100,0)+'%')+'</td>'+
@@ -422,29 +421,29 @@ async function openDetail(symbol){
   const preds=(d.predictions||[]).filter(p=>p.direction!=='hold').map(p=>({
     xAxis:(p.ts||'').slice(11,16),label:{formatter:p.direction==='buy'?'B':'S'}}));
   chart('detailPrice').setOption({backgroundColor:'transparent',grid:{left:54,right:14,top:12,bottom:24},
-    xAxis:{type:'category',data:x,axisLabel:{color:'#5c6a82',fontSize:9}},
-    yAxis:{type:'value',scale:true,axisLabel:{color:'#5c6a82'},splitLine:{lineStyle:{color:'#161d2b'}}},
+    xAxis:{type:'category',data:x,axisLabel:{color:'#9a9a9a',fontSize:9}},
+    yAxis:{type:'value',scale:true,axisLabel:{color:'#9a9a9a'},splitLine:{lineStyle:{color:'#1a1a1a'}}},
     tooltip:{trigger:'axis'},series:[{type:'line',smooth:true,symbol:'none',data:s.map(p=>p.price),
-      lineStyle:{color:'#5b9dff'},markPoint:{data:preds,symbolSize:20}}]});
+      lineStyle:{color:'#0081C8'},markPoint:{data:preds,symbolSize:20}}]});
   chart('detailTech').setOption({backgroundColor:'transparent',grid:{left:40,right:14,top:24,bottom:24},
-    legend:{textStyle:{color:'#7e8a9e'},top:0},
-    xAxis:{type:'category',data:x,axisLabel:{color:'#5c6a82',fontSize:9}},
-    yAxis:{type:'value',axisLabel:{color:'#5c6a82'},splitLine:{lineStyle:{color:'#161d2b'}}},tooltip:{trigger:'axis'},
-    series:[{name:'RSI',type:'line',smooth:true,symbol:'none',data:s.map(p=>p.rsi),lineStyle:{color:'#a78bfa'}},
-      {name:'MACD',type:'line',smooth:true,symbol:'none',data:s.map(p=>p.macd),lineStyle:{color:'#e8c34a'}}]});
+    legend:{textStyle:{color:'#9a9a9a'},top:0},
+    xAxis:{type:'category',data:x,axisLabel:{color:'#9a9a9a',fontSize:9}},
+    yAxis:{type:'value',axisLabel:{color:'#9a9a9a'},splitLine:{lineStyle:{color:'#1a1a1a'}}},tooltip:{trigger:'axis'},
+    series:[{name:'RSI',type:'line',smooth:true,symbol:'none',data:s.map(p=>p.rsi),lineStyle:{color:'#0081C8'}},
+      {name:'MACD',type:'line',smooth:true,symbol:'none',data:s.map(p=>p.macd),lineStyle:{color:'#FCB131'}}]});
   const last=s[s.length-1]||{},h=d.health||{};
   document.getElementById('detailMeta').innerHTML=
     'RSI '+fmt(last.rsi,1)+' · MACD '+fmt(last.macd,3)+' · vol '+pct((last.volatility||0)*100)+' · '+
     'spread '+fmt(last.spread_bps,1)+'bps · chop '+(last.chop?'YES':'no')+' · safety '+
     fmt(h.safety_score,0)+' · '+(h.status||'—');
   document.getElementById('detailPreds').innerHTML=(d.predictions||[]).slice(0,40).map(p=>
-    '<div class="py-0.5" style="border-bottom:1px solid #161d2b"><span style="color:#4b566b">'+
+    '<div class="py-0.5" style="border-bottom:1px solid #1a1a1a"><span style="color:#6a6a6a">'+
     (p.ts||'').slice(11,16)+'</span> '+(p.direction||'').toUpperCase()+' '+
     fmt((p.confidence||0)*100,0)+'% · '+(p.condition||'')+'</div>').join('')||'—';
   const tr=(d.paper_trades||{}).closed||[];
   document.getElementById('detailTrades').innerHTML=tr.slice(0,40).map(t=>{
     const c=(t.pnl||0)>=0?'var(--up)':'var(--down)';
-    return '<div class="py-0.5" style="border-bottom:1px solid #161d2b">'+fmt(t.entry_price,4)+'→'+
+    return '<div class="py-0.5" style="border-bottom:1px solid #1a1a1a">'+fmt(t.entry_price,4)+'→'+
       fmt(t.exit_price,4)+' <span style="color:'+c+'">'+(t.pnl>=0?'+':'')+fmt(t.pnl,2)+'</span></div>';
   }).join('')||'<span style="color:var(--dim)">no closed paper trades</span>';
   document.getElementById('symbolDetail').scrollIntoView({behavior:'smooth'});
@@ -455,12 +454,12 @@ async function renderRegimes(){
   const r=await api('/api/regimes'); if(!r||r.error) return;
   const tl=r.timeline||[];
   chart('regimeChart').setOption({backgroundColor:'transparent',grid:{left:36,right:14,top:12,bottom:24},
-    xAxis:{type:'category',data:tl.map(x=>(x.ts||'').slice(5,16)),axisLabel:{color:'#5c6a82',fontSize:9}},
-    yAxis:{type:'value',min:0,max:100,axisLabel:{color:'#5c6a82'},splitLine:{lineStyle:{color:'#161d2b'}}},
+    xAxis:{type:'category',data:tl.map(x=>(x.ts||'').slice(5,16)),axisLabel:{color:'#9a9a9a',fontSize:9}},
+    yAxis:{type:'value',min:0,max:100,axisLabel:{color:'#9a9a9a'},splitLine:{lineStyle:{color:'#1a1a1a'}}},
     tooltip:{trigger:'axis'},series:[{type:'line',step:'middle',symbol:'none',data:tl.map(x=>x.safety_score),
-      lineStyle:{color:'#22d3ee'},areaStyle:{color:'rgba(34,211,238,0.12)'}}]});
+      lineStyle:{color:'#0081C8'},areaStyle:{color:'rgba(0,129,200,0.16)'}}]});
   const verdict=a=>a==null?'—':a>=55?'<span style="color:var(--up)">works</span>':
-    a>=48?'<span style="color:#e8c34a">marginal</span>':'<span style="color:var(--down)">fails</span>';
+    a>=48?'<span style="color:#FCB131">marginal</span>':'<span style="color:var(--down)">fails</span>';
   document.getElementById('regimeRows').innerHTML=Object.entries(r.by_regime||{}).map(([k,g])=>{
     const c=(g.fake_pnl||0)>=0?'var(--up)':'var(--down)';
     return '<tr><td class="font-semibold">'+k+'</td><td class="mono">'+g.samples+'</td>'+
@@ -472,14 +471,14 @@ async function renderCalibration(){
   const c=await api('/api/calibration'); if(!c||c.error) return;
   const b=c.buckets||[];
   chart('calibChart').setOption({backgroundColor:'transparent',grid:{left:40,right:14,top:30,bottom:24},
-    legend:{textStyle:{color:'#7e8a9e'},top:0},
-    xAxis:{type:'category',data:b.map(x=>x.bucket),axisLabel:{color:'#5c6a82'}},
-    yAxis:{type:'value',min:0,max:100,axisLabel:{color:'#5c6a82'},splitLine:{lineStyle:{color:'#161d2b'}}},
+    legend:{textStyle:{color:'#9a9a9a'},top:0},
+    xAxis:{type:'category',data:b.map(x=>x.bucket),axisLabel:{color:'#9a9a9a'}},
+    yAxis:{type:'value',min:0,max:100,axisLabel:{color:'#9a9a9a'},splitLine:{lineStyle:{color:'#1a1a1a'}}},
     tooltip:{trigger:'axis'},
-    series:[{name:'stated confidence',type:'bar',data:b.map(x=>x.stated_confidence),itemStyle:{color:'#7c5cff',borderRadius:[3,3,0,0]}},
-      {name:'actual accuracy',type:'bar',data:b.map(x=>x.accuracy),itemStyle:{color:'#26d98a',borderRadius:[3,3,0,0]}}]});
+    series:[{name:'stated confidence',type:'bar',data:b.map(x=>x.stated_confidence),itemStyle:{color:'#FCB131',borderRadius:[3,3,0,0]}},
+      {name:'actual accuracy',type:'bar',data:b.map(x=>x.accuracy),itemStyle:{color:'#00A651',borderRadius:[3,3,0,0]}}]});
   document.getElementById('calibRows').innerHTML=b.map(x=>{
-    const fc=x.flag==='OVERCONFIDENT'?'var(--down)':x.flag==='underconfident'?'#e8c34a':'var(--up)';
+    const fc=x.flag==='OVERCONFIDENT'?'var(--down)':x.flag==='underconfident'?'#FCB131':'var(--up)';
     return '<tr><td>'+x.bucket+'</td><td class="mono">'+x.samples+'</td>'+
       '<td class="mono">'+(x.stated_confidence==null?'—':pct(x.stated_confidence))+'</td>'+
       '<td class="mono">'+(x.accuracy==null?'—':pct(x.accuracy))+'</td>'+
@@ -497,14 +496,14 @@ async function renderAccuracy(){
   document.getElementById('accTotal').textContent=a.total_evaluated||0;
   const v=document.getElementById('accVerdict');
   v.textContent=a.should_stop?'STOP — UNRELIABLE':(a.reliable?'RELIABLE':'BUILDING');
-  v.style.color=a.should_stop?'var(--down)':(a.reliable?'var(--up)':'#e8c34a');
+  v.style.color=a.should_stop?'var(--down)':(a.reliable?'var(--up)':'#FCB131');
   const grp=o=>Object.entries(o||{}).map(([k,g])=>
-    '<div class="flex justify-between py-0.5" style="border-bottom:1px solid #161d2b"><span>'+k+'</span>'+
-    '<span class="mono">'+pct(g.accuracy)+' <span style="color:#4b566b">('+g.samples+')</span></span></div>').join('')||'—';
+    '<div class="flex justify-between py-0.5" style="border-bottom:1px solid #1a1a1a"><span>'+k+'</span>'+
+    '<span class="mono">'+pct(g.accuracy)+' <span style="color:#6a6a6a">('+g.samples+')</span></span></div>').join('')||'—';
   document.getElementById('accBySymbol').innerHTML=grp(a.by_symbol);
   document.getElementById('accByRegime').innerHTML=grp(a.by_condition);
   document.getElementById('accWarnings').innerHTML=
-    (a.false_confidence_warnings||[]).map(w=>'<div style="color:#e8c34a" class="py-0.5">⚠ '+w+'</div>').join('')
+    (a.false_confidence_warnings||[]).map(w=>'<div style="color:#FCB131" class="py-0.5">⚠ '+w+'</div>').join('')
     ||'<span style="color:var(--dim)">No false-confidence warnings.</span>';
 }
 async function renderPaper(){
@@ -516,7 +515,7 @@ async function renderPaper(){
   document.getElementById('pDd').textContent=pct(p.max_drawdown_pct);
   document.getElementById('pFees').textContent=fmt(p.total_fees,1)+' / '+fmt(p.total_slippage,1);
   document.getElementById('pOpen').innerHTML=(p.open_positions||[]).map(t=>
-    '<div class="flex justify-between py-1" style="border-bottom:1px solid #161d2b"><span class="font-semibold">'+
+    '<div class="flex justify-between py-1" style="border-bottom:1px solid #1a1a1a"><span class="font-semibold">'+
     t.symbol+'</span><span class="mono">qty '+fmt(t.quantity,4)+' · entry '+fmt(t.entry_price,4)+'</span></div>').join('')
     ||'<span style="color:var(--dim)">No open simulated positions.</span>';
   document.getElementById('pClosed').innerHTML=(p.closed_trades||[]).map(t=>{
@@ -532,19 +531,19 @@ async function renderRisk(){
   const list=(a,e)=>a&&a.length?a.map(x=>'<div class="py-0.5">• '+x+'</div>').join(''):
     '<span style="color:var(--dim)">'+e+'</span>';
   document.getElementById('riskHazards').innerHTML=
-    '<div style="color:#ff7782">PANIC: '+list(r.panic_symbols,'none')+'</div>'+
-    '<div style="color:#f0a85a" class="mt-1">ILLIQUID: '+list(r.illiquid_symbols,'none')+'</div>'+
-    '<div style="color:#f0a85a" class="mt-1">CHOPPY: '+list(r.choppy_symbols,'none')+'</div>';
+    '<div style="color:#EE334E">PANIC: '+list(r.panic_symbols,'none')+'</div>'+
+    '<div style="color:#FCB131" class="mt-1">ILLIQUID: '+list(r.illiquid_symbols,'none')+'</div>'+
+    '<div style="color:#FCB131" class="mt-1">CHOPPY: '+list(r.choppy_symbols,'none')+'</div>';
   document.getElementById('riskModel').innerHTML=
     'Model unreliable: <b style="color:'+(r.model_unreliable?'var(--down)':'var(--up)')+'">'+
     (r.model_unreliable?'YES':'no')+'</b><br>Should stop trading: <b style="color:'+
     (r.should_stop_trading?'var(--down)':'var(--up)')+'">'+(r.should_stop_trading?'YES':'no')+'</b><br>'+
-    '<div class="mt-2" style="color:#e8c34a">'+list(r.false_confidence_warnings,'no false-confidence warnings')+'</div>';
+    '<div class="mt-2" style="color:#FCB131">'+list(r.false_confidence_warnings,'no false-confidence warnings')+'</div>';
   document.getElementById('riskSkipped').innerHTML=(r.skipped||[]).map(s=>
     '<div class="py-0.5">• <b>'+s.symbol+'</b> — '+s.status+'</div>').join('')
     ||'<span style="color:var(--dim)">No symbols skipped.</span>';
   document.getElementById('riskErrors').innerHTML=(r.errors||[]).slice(0,20).map(e=>
-    '<div class="py-0.5"><span style="color:#4b566b">'+(e.ts||'').slice(11,19)+'</span> '+
+    '<div class="py-0.5"><span style="color:#6a6a6a">'+(e.ts||'').slice(11,19)+'</span> '+
     '<span style="color:var(--dim)">['+e.context+']</span> '+e.message+'</div>').join('')
     ||'<span style="color:var(--dim)">No errors logged.</span>';
 }

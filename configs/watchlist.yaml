@@ -7,6 +7,10 @@
 # This is a paper / simulation watchlist. Monitoring a symbol never places a
 # real order.
 
+# The ~35 most-liquid Binance USDT spot pairs. Monitoring the full ~400-pair
+# Binance universe would make each cycle take minutes and is mostly the thin,
+# illiquid long tail these filters exist to reject — so this is the curated
+# liquid set. Add / remove pairs freely.
 symbols:
   - BTCUSDT
   - ETHUSDT
@@ -16,6 +20,33 @@ symbols:
   - DOGEUSDT
   - AVAXUSDT
   - LINKUSDT
+  - ADAUSDT
+  - DOTUSDT
+  - MATICUSDT
+  - LTCUSDT
+  - TRXUSDT
+  - ATOMUSDT
+  - UNIUSDT
+  - NEARUSDT
+  - APTUSDT
+  - ARBUSDT
+  - OPUSDT
+  - INJUSDT
+  - FILUSDT
+  - ETCUSDT
+  - XLMUSDT
+  - ICPUSDT
+  - HBARUSDT
+  - VETUSDT
+  - ALGOUSDT
+  - AAVEUSDT
+  - MKRUSDT
+  - SUIUSDT
+  - SEIUSDT
+  - TIAUSDT
+  - RNDRUSDT
+  - IMXUSDT
+  - GRTUSDT
 
 # --- quality filters (a symbol must pass all of them) ---
 min_24h_volume_usd: 50000000        # reject low-volume markets
