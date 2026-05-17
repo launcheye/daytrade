@@ -25,6 +25,24 @@ from daytrade.ml import build_dataset  # noqa: E402
 from daytrade.validation import walk_forward_validate  # noqa: E402
 
 
+@pytest.fixture(autouse=True)
+def _isolate_observatory_state(tmp_path, monkeypatch):
+    """Redirect observatory runtime state files into a per-test temp dir.
+
+    Without this, observer tests would write the real
+    ``data/learning_state.json`` / ``data/now.json`` and ``reports/observer/``
+    — clobbering a live bot's state. Every test gets its own throwaway dir.
+    """
+    from daytrade.observatory import learning as _learning
+    from daytrade.observatory import observer as _observer
+
+    monkeypatch.setattr(_learning, "LEARNING_STATE_PATH",
+                        tmp_path / "learning_state.json")
+    monkeypatch.setattr(_observer, "_NOW_PATH", tmp_path / "now.json")
+    monkeypatch.setattr(_observer, "_OBSERVER_REPORTS", tmp_path / "observer")
+    monkeypatch.setattr(_observer, "_LOG_FILE", tmp_path / "daytrade.log")
+
+
 @pytest.fixture(scope="session")
 def config():
     """The default config (no .env, so tests are hermetic). Read-only."""

@@ -244,6 +244,27 @@ class DashboardData:
                  "condition": s["condition"]}
                 for s in self.db.safety_score_history(limit)]
 
+    def equity_history(self) -> Dict[str, Any]:
+        """Accumulated paper-equity curve — the visual 'gain over time'."""
+        curve = self.db.equity_curve(limit=3000)
+        points = [{
+            "ts": r["ts"], "equity": r["equity"],
+            "gain": round((r["equity"] or _STARTING_CASH) - _STARTING_CASH, 2),
+            "gain_pct": round(((r["equity"] or _STARTING_CASH)
+                               / _STARTING_CASH - 1) * 100, 3),
+            "drawdown_pct": round((r.get("drawdown_pct") or 0.0) * 100, 2),
+        } for r in curve]
+        current = curve[-1]["equity"] if curve else _STARTING_CASH
+        peak = max((p["equity"] for p in points), default=_STARTING_CASH)
+        return {
+            "starting_cash": _STARTING_CASH,
+            "current_equity": round(current, 2),
+            "peak_equity": round(peak, 2),
+            "total_gain": round(current - _STARTING_CASH, 2),
+            "total_gain_pct": round((current / _STARTING_CASH - 1) * 100, 2),
+            "points": points,
+        }
+
     # -- learning observatory pages -----------------------------------------
 
     def progress(self) -> Dict[str, Any]:

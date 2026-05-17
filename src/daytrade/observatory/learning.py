@@ -118,8 +118,9 @@ class LearningSession:
 
     def save_state(self, now: datetime, counts: Dict[str, Any],
                    status: str = "OBSERVING",
-                   path: Path | str = LEARNING_STATE_PATH) -> None:
-        path = Path(path)
+                   path: Path | str | None = None) -> None:
+        # Resolve the path at call time so tests can redirect LEARNING_STATE_PATH.
+        path = Path(path) if path is not None else LEARNING_STATE_PATH
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(self.state_dict(now, counts, status),
                                    indent=2), encoding="utf-8")

@@ -207,7 +207,8 @@ class Observer:
             score=global_assessment.score, status=global_assessment.status,
             condition=global_assessment.condition,
             reasons=global_assessment.reasons,
-            breakdown=global_assessment.breakdown)
+            breakdown=global_assessment.breakdown,
+            equity=round(equity, 2), drawdown_pct=round(drawdown, 4))
         # Per-cycle regime record (drives the regime timeline).
         day_no = (self.learning_session.day_number(now)
                   if self.learning_session else 0)

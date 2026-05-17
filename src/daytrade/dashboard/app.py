@@ -76,6 +76,10 @@ def create_app(db_path: Path | str = DEFAULT_DB_PATH) -> FastAPI:
     def safety_history() -> Any:
         return _safe(lambda d: d.safety_history())
 
+    @app.get("/api/equity")
+    def equity() -> Any:
+        return _safe(lambda d: d.equity_history())
+
     # --- learning observatory endpoints ---
 
     @app.get("/api/status")

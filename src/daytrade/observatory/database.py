@@ -53,7 +53,7 @@ CREATE TABLE IF NOT EXISTS paper_trades (
 CREATE TABLE IF NOT EXISTS safety_scores (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     ts TEXT NOT NULL, score REAL, status TEXT, condition TEXT,
-    reasons TEXT, breakdown TEXT
+    reasons TEXT, breakdown TEXT, equity REAL, drawdown_pct REAL
 );
 CREATE TABLE IF NOT EXISTS symbol_health (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -322,6 +322,12 @@ class ObservatoryDB:
     def safety_score_history(self, limit: int = 200) -> List[Dict[str, Any]]:
         return list(reversed(self._all(
             "SELECT * FROM safety_scores ORDER BY id DESC LIMIT ?", (limit,))))
+
+    def equity_curve(self, limit: int = 3000) -> List[Dict[str, Any]]:
+        """Per-cycle paper-equity history (drives the accumulated-gain chart)."""
+        return list(reversed(self._all(
+            "SELECT ts, equity, drawdown_pct, score FROM safety_scores "
+            "WHERE equity IS NOT NULL ORDER BY id DESC LIMIT ?", (limit,))))
 
     def latest_symbol_health(self) -> List[Dict[str, Any]]:
         return self._all(
