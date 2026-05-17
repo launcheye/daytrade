@@ -57,7 +57,14 @@ from ..reporting import (
     save_json,
     save_text,
 )
-from ..observatory import LiveMockFeed, Observer, ObservatoryDB, write_daily_report
+from ..observatory import (
+    LearningSession,
+    LiveMockFeed,
+    Observer,
+    ObservatoryDB,
+    load_learning_state,
+    write_daily_report,
+)
 from ..observatory.database import DEFAULT_DB_PATH
 from ..observatory.prediction_tracker import build_prediction_memory
 from ..runtime import apply_runtime, get_logger
@@ -457,6 +464,55 @@ def sandbox_check(
     _console.print(Panel("\n".join(f"✓ {p}" for p in proof),
                          title="Real execution is structurally disabled",
                          border_style="green"))
+
+
+def _load_observer_model():
+    """Load the trained ML model if one has been saved, else None."""
+    model_path = _MODELS / "model.pkl"
+    if not model_path.exists():
+        return None
+    try:
+        model = PredictiveModel.load(model_path)
+        _console.print(f"Loaded ML model: {model.version}")
+        return model
+    except Exception as exc:  # noqa: BLE001
+        _console.print(f"[yellow]ML model not loaded:[/yellow] {exc}")
+        return None
+
+
+@app.command()
+def learn(
+    profile: Optional[str] = typer.Option(None, help="Config profile."),
+    days: int = typer.Option(30, help="Length of the learning window, in days."),
+    interval: int = typer.Option(300, help="Seconds between observation cycles."),
+) -> None:
+    """Run the multi-day Paper Trading Learning Observatory (Ctrl+C to stop).
+
+    Observes the watchlist for ``--days`` days, tracking learning phases,
+    progress, prediction reliability and a Paper Strategy Readiness score.
+    Resumes the same window on restart. Paper / simulation only.
+    """
+    cfg = _setup(profile)
+    _console.rule(f"[bold]daytrade — {days}-Day Paper Trading Learning Observatory")
+    _console.print("Paper / simulation only. No real trading, wallets, or "
+                    "money movement. Ctrl+C to pause; the window resumes on "
+                    "restart.\n")
+    db = ObservatoryDB()
+    session = LearningSession.resume_or_create(db, target_days=days,
+                                               interval_seconds=interval)
+    observer = Observer(cfg, load_watchlist_config(), db=db,
+                        feed=LiveMockFeed(), model=_load_observer_model(),
+                        learning_session=session)
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc)
+    _console.print(
+        f"Learning session: day {session.day_number(now)}/{days}, "
+        f"phase '{session.phase(now)}', {session.cycles_completed} cycles done.")
+    _console.print(f"Observing {len(observer.watchlist_config.symbols)} symbols "
+                   f"every {interval}s. Open the dashboard to watch progress.\n")
+    observer.run_forever(interval)
+    _console.print("\n[green]Learning observer stopped.[/green] "
+                   "Re-run 'trading-bot learn' to resume the window.")
 
 
 @app.command()

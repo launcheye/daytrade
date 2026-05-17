@@ -20,7 +20,7 @@ import os
 import signal
 import time
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -31,9 +31,12 @@ from ..risk import RiskEngine, position_size
 from ..runtime import add_file_logging, get_logger
 from ..watchlist import WatchlistScreener, extract_metrics
 from .alerts import AlertManager, Alert, LEVEL_CRITICAL, build_condition_alerts
+from .daily_report import write_daily_report
 from .database import ObservatoryDB
 from .feed import LiveMockFeed
+from .metrics import roll_up_day
 from .prediction_tracker import build_prediction_memory, evaluate_prediction
+from .readiness import ReadinessInputs, compute_readiness
 from .safety_score import SafetyInputs, aggregate_safety, compute_safety_score
 
 _log = get_logger("observatory.observer")
@@ -41,6 +44,16 @@ _log = get_logger("observatory.observer")
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 _LOG_FILE = _REPO_ROOT / "logs" / "daytrade.log"
 _OBSERVER_REPORTS = _REPO_ROOT / "reports" / "observer"
+_NOW_PATH = _REPO_ROOT / "data" / "now.json"
+
+# The 10 steps of one observation cycle (for the dashboard "Now" panel).
+CYCLE_STEPS = [
+    "Fetching market data", "Validating liquidity",
+    "Running technical analysis", "Running orderbook analysis",
+    "Running macro/regime analysis", "Creating prediction",
+    "Simulating trade", "Updating outcomes", "Saving metrics",
+    "Waiting for next cycle",
+]
 
 
 @dataclass
@@ -74,6 +87,7 @@ class Observer:
         db: Optional[ObservatoryDB] = None,
         feed: Optional[LiveMockFeed] = None,
         model=None,
+        learning_session=None,
     ) -> None:
         self.config = config
         self.watchlist_config = watchlist_config
@@ -83,10 +97,14 @@ class Observer:
         self.screener = WatchlistScreener(watchlist_config)
         self.alerts = AlertManager(
             db=self.db, allow_network=config.runtime.allow_network)
+        # Optional 30-day learning session (set by `daytrade learn`).
+        self.learning_session = learning_session
 
         self._run_id: Optional[int] = None
         self._cycle = 0
         self._stop = False
+        self._interval = 300
+        self._last_day: Optional[str] = None
         self._starting_cash = config.paper.starting_cash
         # symbol -> open paper position {trade_id, qty, entry, stop, target}
         self._open: Dict[str, Dict[str, float]] = {}
@@ -128,7 +146,10 @@ class Observer:
         """Execute exactly one observation cycle and return its summary."""
         now = now or datetime.now(timezone.utc)
         self._cycle += 1
+        self._errors_this_cycle = 0
         summary = CycleSummary(cycle=self._cycle, timestamp=now.isoformat())
+        self._set_now("Fetching market data", "", now)
+        self._activity(f"cycle {self._cycle} started", level="info")
 
         memory = build_prediction_memory(self.db.outcomes(limit=500))
         recent_accuracy = memory.overall_accuracy if memory.total >= 10 else None
@@ -140,11 +161,13 @@ class Observer:
         assessments = []
         illiquid: List[str] = []
         for symbol in self.watchlist_config.symbols:
+            self._set_now("Running technical analysis", symbol, now)
             try:
                 assessment = self._observe_symbol(symbol, now, memory,
                                                   recent_accuracy, equity)
             except Exception as exc:  # noqa: BLE001 - one symbol must not kill the cycle
                 self.db.insert_error(f"observe:{symbol}", repr(exc))
+                self._errors_this_cycle += 1
                 _log.exception("error observing %s", symbol)
                 continue
             summary.symbols_observed += 1
@@ -156,7 +179,11 @@ class Observer:
             summary.predictions_made += 1
 
         # Evaluate matured predictions against reality.
+        self._set_now("Updating outcomes", "", now)
         summary.predictions_evaluated = self._evaluate_predictions(now)
+        if summary.predictions_evaluated:
+            self._activity(f"{summary.predictions_evaluated} prediction(s) "
+                           "evaluated against reality", level="info")
 
         # Manage open paper positions (stop / target exits).
         summary.closed_this_cycle = self._manage_positions(now)
@@ -170,6 +197,7 @@ class Observer:
         summary.drawdown_pct = round(drawdown, 4)
 
         # Global safety score.
+        self._set_now("Saving metrics", "", now)
         global_assessment = aggregate_safety(assessments)
         summary.global_score = global_assessment.score
         summary.global_status = global_assessment.status
@@ -180,6 +208,14 @@ class Observer:
             condition=global_assessment.condition,
             reasons=global_assessment.reasons,
             breakdown=global_assessment.breakdown)
+        # Per-cycle regime record (drives the regime timeline).
+        day_no = (self.learning_session.day_number(now)
+                  if self.learning_session else 0)
+        self.db.insert_regime_period(
+            ts=now.isoformat(), day_number=day_no,
+            condition=global_assessment.condition,
+            regime=global_assessment.condition.lower(),
+            safety_score=global_assessment.score)
 
         # Alerts.
         alerts = build_condition_alerts(
@@ -190,11 +226,18 @@ class Observer:
         for alert in alerts:
             if self.alerts.emit(alert):
                 summary.alerts.append(f"{alert.kind}: {alert.message}")
+                self.db.insert_alert(alert.level, alert.kind, alert.message)
+                self._activity(f"alert: {alert.message}", level=alert.level)
+
+        # Learning-session bookkeeping: progress, readiness, day rollover.
+        if self.learning_session is not None:
+            self._learning_cycle(now, summary, drawdown)
 
         # Heartbeat + per-cycle report artifact.
         if self._run_id is not None:
             self.db.heartbeat(self._run_id, self._cycle)
         self._write_cycle_report(summary)
+        self._set_now("Waiting for next cycle", "", now, done=True)
         _log.info("cycle %d: score=%.0f %s/%s | %d tradeable | equity=%.0f "
                   "dd=%.1f%%", summary.cycle, summary.global_score,
                   summary.global_status, summary.global_condition,
@@ -269,6 +312,17 @@ class Observer:
             recent_accuracy=sym_accuracy, safety_score=safety.score,
             status=status)
 
+        # --- activity feed ---
+        if not screening.approved:
+            reason = screening.rejections[0] if screening.rejections else "filtered"
+            self._activity(f"skipped {symbol}", reason)
+        elif decision.action.value != "hold":
+            self._activity(f"prediction created for {symbol}",
+                           f"{decision.action.value.upper()} "
+                           f"conf {decision.confidence:.0%}")
+        else:
+            self._activity(f"scanning {symbol}", f"condition {safety.condition}")
+
         # --- paper-trading simulation step (entry only; exits in _manage) ---
         self._maybe_open_position(symbol, decision, screening, price,
                                   liquidity_notional, equity, now,
@@ -287,6 +341,106 @@ class Observer:
                 self.db.mark_prediction_evaluated(prediction["id"])
             evaluated += 1
         return evaluated
+
+    # -- learning session ----------------------------------------------------
+
+    def _learning_cycle(self, now: datetime, summary: "CycleSummary",
+                        drawdown: float) -> None:
+        """Per-cycle learning bookkeeping: progress, readiness, day rollover."""
+        session = self.learning_session
+        session.cycles_completed = self._cycle
+        if session.session_id is not None:
+            self.db.update_learning_session(session.session_id, self._cycle)
+
+        counts = {
+            "symbols_monitored": len(self.watchlist_config.symbols),
+            "predictions_made": self.db.count("predictions"),
+            "predictions_evaluated": self.db.count("prediction_outcomes"),
+            "fake_trades": self.db.count("paper_trades"),
+            "skipped_trades": sum(1 for h in self.db.latest_symbol_health()
+                                  if h.get("status") != "GOOD PAPER CONDITIONS"),
+        }
+        status = "PAPER TRADING" if self._open else "OBSERVING"
+        session.save_state(now, counts, status)
+
+        readiness = self._compute_readiness(now, drawdown)
+        self.db.insert_readiness(
+            ts=now.isoformat(), score=readiness.score, level=readiness.level,
+            capped=int(readiness.capped), day_number=readiness.day_number,
+            breakdown=readiness.breakdown, blockers=readiness.blockers)
+
+        # Day rollover: aggregate the previous day, write its report.
+        today = now.date().isoformat()
+        if self._last_day is None:
+            self._last_day = today
+        elif today != self._last_day:
+            self._day_rollover(self._last_day, now)
+            self._last_day = today
+
+    def _compute_readiness(self, now: datetime, drawdown: float):
+        """Build readiness inputs from the session + database and score them."""
+        session = self.learning_session
+        memory = build_prediction_memory(self.db.outcomes(limit=8000))
+        regimes = {r.get("condition") for r in self.db.regime_periods(limit=8000)}
+        accs = [g.accuracy for g in memory.by_condition.values() if g.samples >= 3]
+        spread = (max(accs) - min(accs)) if len(accs) >= 2 else 0.0
+        errors = self.db.recent_errors(limit=4000)
+        api_failures = sum(1 for e in errors
+                           if "api" in (e.get("context") or "").lower()
+                           or "exchange" in (e.get("context") or "").lower())
+        return compute_readiness(ReadinessInputs(
+            day_number=session.day_number(now),
+            target_days=session.target_days,
+            predictions_evaluated=memory.total,
+            uptime_pct=session.uptime_pct(now),
+            max_drawdown_pct=drawdown * 100.0,
+            overall_accuracy=memory.overall_accuracy,
+            false_confidence_count=len(memory.false_confidence_warnings()),
+            regimes_observed=len([r for r in regimes if r]),
+            regime_accuracy_spread=spread,
+            api_failures=api_failures))
+
+    def _day_rollover(self, day_date: str, now: datetime) -> None:
+        """Aggregate a completed day and write its daily report."""
+        session = self.learning_session
+        day_number = max(1, session.day_number(now) - 1)
+        try:
+            metric = roll_up_day(self.db, day_date, day_number,
+                                 int(86_400 / session.interval_seconds))
+            self.db.upsert_daily_metric(day_date, **metric)
+            write_daily_report(self.db, day_date)
+            self._activity(f"daily report generated for {day_date}",
+                           f"day {day_number}", level="info")
+            _log.info("day %d rolled up (%s): %s", day_number, day_date,
+                      metric.get("status"))
+        except Exception as exc:  # noqa: BLE001 - rollover must not crash the loop
+            self.db.insert_error("day_rollover", repr(exc))
+
+    def _activity(self, event: str, detail: str = "", level: str = "info") -> None:
+        """Record one live-activity-feed event (best-effort)."""
+        try:
+            self.db.insert_activity(event, detail, level, self._cycle)
+        except Exception:  # noqa: BLE001 - activity logging must never crash
+            pass
+
+    def _set_now(self, step: str, symbol: str, now: datetime,
+                 done: bool = False) -> None:
+        """Write the live 'what is it doing right now' state to data/now.json."""
+        try:
+            next_cycle = (now + timedelta(seconds=self._interval)).isoformat() \
+                if done else None
+            _NOW_PATH.parent.mkdir(parents=True, exist_ok=True)
+            _NOW_PATH.write_text(json.dumps({
+                "cycle": self._cycle,
+                "started_at": now.isoformat(),
+                "current_step": step,
+                "current_symbol": symbol,
+                "next_cycle_at": next_cycle,
+                "errors_this_cycle": getattr(self, "_errors_this_cycle", 0),
+                "steps": CYCLE_STEPS,
+            }), encoding="utf-8")
+        except OSError:  # pragma: no cover
+            pass
 
     # -- paper trading -------------------------------------------------------
 
@@ -316,6 +470,8 @@ class Observer:
             "entry": decision.entry, "stop": decision.stop,
             "target": decision.target,
         }
+        self._activity(f"paper trade opened: {symbol}",
+                       f"qty {sizing.quantity:.4f} @ {decision.entry:.4f} (sim)")
         _log.info("paper-opened %s qty=%.6f entry=%.4f (sim)",
                   symbol, sizing.quantity, decision.entry)
 
@@ -391,12 +547,23 @@ class Observer:
     # -- the forever loop ----------------------------------------------------
 
     def run_forever(self, interval: int = 300) -> None:
-        """Run cycles every ``interval`` seconds until interrupted."""
+        """Run cycles every ``interval`` seconds.
+
+        Stops on a signal, or — in a learning session — once the configured
+        observation window (e.g. 30 days) has fully elapsed.
+        """
         self._install_signal_handlers()
+        self._interval = interval
         self.start()
         consecutive_failures = 0
         try:
             while not self._stop:
+                if (self.learning_session is not None
+                        and self.learning_session.is_complete(
+                            datetime.now(timezone.utc))):
+                    _log.info("learning window complete — stopping observer")
+                    self._learning_complete = True
+                    break
                 try:
                     self.run_once()
                     consecutive_failures = 0
@@ -415,7 +582,14 @@ class Observer:
                     time.sleep(min(1.0, interval - slept))
                     slept += 1.0
         finally:
-            self.stop("stopped" if self._stop else "crashed")
+            final = "completed" if getattr(self, "_learning_complete", False) \
+                else ("stopped" if self._stop else "crashed")
+            if (self.learning_session is not None
+                    and self.learning_session.session_id is not None):
+                self.db.update_learning_session(
+                    self.learning_session.session_id, self._cycle,
+                    status="completed" if final == "completed" else "stopped")
+            self.stop(final)
             self.db.close()
 
     def _install_signal_handlers(self) -> None:

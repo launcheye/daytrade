@@ -11,12 +11,30 @@ from .alerts import Alert, AlertManager, build_condition_alerts
 from .daily_report import build_daily_report_markdown, write_daily_report
 from .database import DEFAULT_DB_PATH, ObservatoryDB
 from .feed import LiveMockFeed, known_symbols, profile_for
+from .learning import (
+    LEARNING_PHASES,
+    LearningSession,
+    load_learning_state,
+    phase_for,
+)
+from .metrics import (
+    confidence_calibration,
+    learning_metrics,
+    regime_metrics,
+    roll_up_day,
+)
 from .observer import CycleSummary, Observer
 from .prediction_tracker import (
     HORIZONS,
     PredictionMemory,
     build_prediction_memory,
     evaluate_prediction,
+)
+from .readiness import (
+    ReadinessAssessment,
+    ReadinessInputs,
+    compute_readiness,
+    readiness_level,
 )
 from .safety_score import (
     SafetyAssessment,
@@ -46,4 +64,17 @@ __all__ = [
     "build_condition_alerts",
     "build_daily_report_markdown",
     "write_daily_report",
+    # learning
+    "LearningSession",
+    "LEARNING_PHASES",
+    "load_learning_state",
+    "phase_for",
+    "ReadinessInputs",
+    "ReadinessAssessment",
+    "compute_readiness",
+    "readiness_level",
+    "confidence_calibration",
+    "regime_metrics",
+    "learning_metrics",
+    "roll_up_day",
 ]

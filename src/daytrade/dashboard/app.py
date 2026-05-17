@@ -76,24 +76,83 @@ def create_app(db_path: Path | str = DEFAULT_DB_PATH) -> FastAPI:
     def safety_history() -> Any:
         return _safe(lambda d: d.safety_history())
 
+    # --- learning observatory endpoints ---
+
+    @app.get("/api/status")
+    def status() -> Any:
+        return _safe(lambda d: d.status())
+
+    @app.get("/api/progress")
+    def progress() -> Any:
+        return _safe(lambda d: d.progress())
+
+    @app.get("/api/regimes")
+    def regimes() -> Any:
+        return _safe(lambda d: d.regimes())
+
+    @app.get("/api/calibration")
+    def calibration() -> Any:
+        return _safe(lambda d: d.calibration())
+
+    @app.get("/api/readiness")
+    def readiness() -> Any:
+        return _safe(lambda d: d.readiness())
+
+    @app.get("/api/learning")
+    def learning() -> Any:
+        return _safe(lambda d: d.learning())
+
+    @app.get("/api/activity")
+    def activity() -> Any:
+        return _safe(lambda d: d.activity())
+
+    @app.get("/api/predictions")
+    def predictions() -> Any:
+        return _safe(lambda d: d.predictions())
+
+    @app.get("/api/paper-trades")
+    def paper_trades() -> Any:
+        return _safe(lambda d: d.paper())
+
+    @app.get("/api/daily-reports")
+    def daily_reports() -> Any:
+        return _safe(lambda d: d.daily_reports())
+
+    @app.get("/api/symbols/{symbol}")
+    def symbol_detail_plural(symbol: str) -> Any:
+        return _safe(lambda d: d.symbol_detail(symbol))
+
     @app.get("/api/health")
     def health() -> JSONResponse:
         return JSONResponse({"ok": True, "real_trading": False,
-                             "paper_only": True})
+                             "paper_only": True, "wallets": False,
+                             "bank_transfers": False})
 
-    @app.websocket("/ws")
-    async def ws(socket: WebSocket) -> None:
-        """Push the overview payload every few seconds."""
+    async def _ws_loop(socket: WebSocket) -> None:
         await socket.accept()
         try:
             while True:
-                payload: Dict[str, Any] = _safe(lambda d: d.overview())
+                payload = {
+                    "overview": _safe(lambda d: d.overview()),
+                    "status": _safe(lambda d: d.status()),
+                    "progress": _safe(lambda d: d.progress()),
+                }
                 await socket.send_text(json.dumps(payload, default=str))
                 await asyncio.sleep(4.0)
         except WebSocketDisconnect:
             return
         except Exception:  # noqa: BLE001 - never crash the server on a socket
             return
+
+    @app.websocket("/ws")
+    async def ws(socket: WebSocket) -> None:
+        """Push overview + status + progress every few seconds."""
+        await _ws_loop(socket)
+
+    @app.websocket("/ws/live")
+    async def ws_live(socket: WebSocket) -> None:
+        """Alias of /ws (the endpoint name from the spec)."""
+        await _ws_loop(socket)
 
     return app
 

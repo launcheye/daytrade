@@ -14,14 +14,31 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from ..observatory.database import DEFAULT_DB_PATH, ObservatoryDB
+from ..observatory.metrics import (
+    confidence_calibration,
+    learning_metrics,
+    regime_metrics,
+)
 from ..observatory.prediction_tracker import build_prediction_memory
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 _LATEST_CYCLE = _REPO_ROOT / "reports" / "observer" / "latest.json"
+_NOW_PATH = _REPO_ROOT / "data" / "now.json"
+_LEARNING_STATE = _REPO_ROOT / "data" / "learning_state.json"
+_DAILY_DIR = _REPO_ROOT / "reports" / "daily"
 
 # A heartbeat older than this means the observer is not considered "live".
 _HEARTBEAT_STALE_SECONDS = 1200.0
 _STARTING_CASH = 10_000.0
+
+
+def _read_json(path: Path) -> Dict[str, Any]:
+    if path.exists():
+        try:
+            return json.loads(path.read_text())
+        except (ValueError, OSError):
+            return {}
+    return {}
 
 
 def _json_field(value: Any) -> Any:
@@ -226,6 +243,95 @@ class DashboardData:
         return [{"ts": s["ts"], "score": s["score"], "status": s["status"],
                  "condition": s["condition"]}
                 for s in self.db.safety_score_history(limit)]
+
+    # -- learning observatory pages -----------------------------------------
+
+    def progress(self) -> Dict[str, Any]:
+        """30-day learning progress: day, phase, cycles, uptime, day timeline."""
+        state = _read_json(_LEARNING_STATE)
+        session = self.db.current_learning_session() or {}
+        timeline = [
+            {"day": m.get("day_number"), "date": m.get("day_date"),
+             "status": m.get("status", "yellow"),
+             "uptime_pct": m.get("uptime_pct"), "accuracy": m.get("accuracy"),
+             "cycles": m.get("cycles")}
+            for m in self.db.daily_metrics()
+        ]
+        return {
+            "active": bool(state) and not state.get("complete", False),
+            "current_day": state.get("current_day", 0),
+            "target_days": state.get("target_days",
+                                     session.get("target_days", 30)),
+            "days_remaining": state.get("days_remaining"),
+            "progress_pct": state.get("progress_pct", 0.0),
+            "cycles_completed": state.get("cycles_completed", 0),
+            "expected_cycles": state.get("expected_cycles", 0),
+            "total_expected_cycles": state.get("total_expected_cycles", 0),
+            "predictions_made": state.get("predictions_made", 0),
+            "predictions_evaluated": state.get("predictions_evaluated", 0),
+            "fake_trades": state.get("fake_trades", 0),
+            "skipped_trades": state.get("skipped_trades", 0),
+            "uptime_pct": state.get("uptime_pct", 0.0),
+            "current_phase": state.get("current_phase", "not started"),
+            "status": state.get("status", "NOT STARTED"),
+            "symbols_monitored": state.get("symbols_monitored", 0),
+            "day_timeline": timeline,
+        }
+
+    def status(self) -> Dict[str, Any]:
+        """The 'what is it doing right now' panel."""
+        now = _read_json(_NOW_PATH)
+        run = self.db.current_bot_run() or {}
+        state = _read_json(_LEARNING_STATE)
+        return {
+            "bot_running": self._observer_live(run),
+            "bot_status": run.get("status", "never started"),
+            "cycle": now.get("cycle", run.get("cycles", 0)),
+            "current_step": now.get("current_step", "idle"),
+            "current_symbol": now.get("current_symbol", ""),
+            "started_at": now.get("started_at"),
+            "next_cycle_at": now.get("next_cycle_at"),
+            "errors_this_cycle": now.get("errors_this_cycle", 0),
+            "steps": now.get("steps", []),
+            "phase": state.get("current_phase", "—"),
+            "learning_status": state.get("status", "—"),
+        }
+
+    def regimes(self) -> Dict[str, Any]:
+        return regime_metrics(self.db.outcomes(limit=8000),
+                              self.db.regime_periods(limit=3000))
+
+    def calibration(self) -> Dict[str, Any]:
+        return confidence_calibration(self.db.outcomes(limit=8000))
+
+    def readiness(self) -> Dict[str, Any]:
+        latest = self.db.latest_readiness() or {}
+        return {
+            "score": latest.get("score", 0.0),
+            "level": latest.get("level", "NOT ENOUGH DATA"),
+            "capped": bool(latest.get("capped")),
+            "day_number": latest.get("day_number", 0),
+            "breakdown": _json_field(latest.get("breakdown")) or {},
+            "blockers": _json_field(latest.get("blockers")) or [],
+            "history": [{"ts": r["ts"], "score": r["score"]}
+                        for r in self.db.readiness_history(200)],
+            "notice": "A high score never means 'safe to invest' — only "
+                      "'strong paper performance, still not guaranteed'.",
+        }
+
+    def learning(self) -> Dict[str, Any]:
+        return learning_metrics(self.db)
+
+    def activity(self, limit: int = 60) -> List[Dict[str, Any]]:
+        return self.db.recent_activity(limit)
+
+    def predictions(self, limit: int = 100) -> List[Dict[str, Any]]:
+        return self.db.recent_predictions(limit=limit)
+
+    def daily_reports(self) -> Dict[str, Any]:
+        files = sorted((p.name for p in _DAILY_DIR.glob("*.md")), reverse=True) \
+            if _DAILY_DIR.exists() else []
+        return {"metrics": self.db.daily_metrics(), "report_files": files}
 
     # -- helpers -------------------------------------------------------------
 

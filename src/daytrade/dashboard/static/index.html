@@ -3,332 +3,541 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>daytrade — Market Safety Observatory</title>
+<title>daytrade — 30-Day Paper Trading Learning Observatory</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
 <style>
-  body { background:#0b0f17; color:#e5e7eb; font-family:ui-sans-serif,system-ui,sans-serif; }
-  .card { background:#141a26; border:1px solid #1f2937; border-radius:0.75rem; }
-  .tab-active { background:#1f2937; color:#fff; }
+  body { background:#0a0d14; color:#e6e8eb; font-family:ui-sans-serif,system-ui,-apple-system,sans-serif; }
+  .card { background:#121722; border:1px solid #1e2633; border-radius:0.7rem; }
+  .tab-active { background:#1e2633; color:#fff; }
+  .tab { color:#8b95a5; transition:background .15s; }
+  .tab:hover { background:#171d29; }
   table { border-collapse:collapse; width:100%; }
-  th,td { padding:0.5rem 0.75rem; text-align:left; font-size:0.85rem; }
-  th { color:#9ca3af; border-bottom:1px solid #1f2937; }
+  th,td { padding:0.45rem 0.7rem; text-align:left; font-size:0.82rem; }
+  th { color:#8b95a5; border-bottom:1px solid #1e2633; font-weight:600; text-transform:uppercase; font-size:0.68rem; letter-spacing:0.04em; }
   td { border-bottom:1px solid #141a26; }
+  tr.clk:hover { background:#171d29; cursor:pointer; }
+  .mono { font-variant-numeric:tabular-nums; }
+  ::-webkit-scrollbar { width:8px; height:8px; } ::-webkit-scrollbar-thumb { background:#2a3343; border-radius:4px; }
 </style>
 </head>
 <body class="min-h-screen">
-<div class="max-w-7xl mx-auto p-4 md:p-6">
+<div class="max-w-[1500px] mx-auto p-4 md:p-5">
 
-  <header class="flex items-center justify-between mb-4">
+  <header class="flex items-center justify-between mb-3">
     <div>
-      <h1 class="text-xl font-bold">🛰️ Market Safety Observatory</h1>
-      <p class="text-xs text-gray-500">Paper / simulation only — no real orders, no wallets, no money movement.</p>
+      <h1 class="text-lg font-bold tracking-tight">◵ daytrade — Paper Trading Learning Observatory</h1>
+      <p class="text-[11px] text-gray-600">30-day paper/simulation observatory · no real trading · no wallets · no money movement</p>
     </div>
-    <div id="botStatus" class="text-sm text-right"></div>
+    <div id="botStatus" class="text-xs text-right mono"></div>
   </header>
 
   <!-- GIANT STATUS CARD -->
-  <div id="statusCard" class="card p-6 mb-4 text-center">
-    <div class="text-sm tracking-widest text-gray-400">MARKET STATUS</div>
-    <div id="statusText" class="text-5xl font-black my-2">—</div>
-    <div id="scoreText" class="text-2xl font-bold">SAFETY SCORE: — / 100</div>
-    <div id="reasonText" class="text-sm text-gray-400 mt-2">—</div>
-    <div id="conditionText" class="mt-3 inline-block px-3 py-1 rounded-full text-sm font-semibold">—</div>
+  <div id="statusCard" class="card p-5 mb-3 text-center">
+    <div class="text-[11px] tracking-[0.2em] text-gray-500">MARKET STATUS</div>
+    <div id="statusText" class="text-4xl md:text-5xl font-black my-1">—</div>
+    <div class="flex items-center justify-center gap-4 flex-wrap text-sm">
+      <span id="scoreText" class="font-bold">SAFETY —/100</span>
+      <span id="conditionText" class="px-2 py-0.5 rounded-full text-xs font-semibold">—</span>
+      <span id="readinessChip" class="px-2 py-0.5 rounded-full text-xs font-semibold">READINESS —</span>
+    </div>
+    <div id="reasonText" class="text-xs text-gray-500 mt-2">—</div>
   </div>
 
   <!-- KPI ROW -->
-  <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-    <div class="card p-3"><div class="text-xs text-gray-500">PAPER EQUITY</div><div id="kpiEquity" class="text-xl font-bold">—</div></div>
-    <div class="card p-3"><div class="text-xs text-gray-500">SIM DRAWDOWN</div><div id="kpiDrawdown" class="text-xl font-bold">—</div></div>
-    <div class="card p-3"><div class="text-xs text-gray-500">PREDICTION ACCURACY</div><div id="kpiAccuracy" class="text-xl font-bold">—</div></div>
-    <div class="card p-3"><div class="text-xs text-gray-500">MODEL RELIABLE</div><div id="kpiReliable" class="text-xl font-bold">—</div></div>
+  <div class="grid grid-cols-2 md:grid-cols-6 gap-2.5 mb-3">
+    <div class="card p-2.5"><div class="text-[10px] text-gray-500">DAY</div><div id="kDay" class="text-lg font-bold mono">—</div></div>
+    <div class="card p-2.5"><div class="text-[10px] text-gray-500">LEARNING PROGRESS</div><div id="kProgress" class="text-lg font-bold mono">—</div></div>
+    <div class="card p-2.5"><div class="text-[10px] text-gray-500">PAPER PNL</div><div id="kPnl" class="text-lg font-bold mono">—</div></div>
+    <div class="card p-2.5"><div class="text-[10px] text-gray-500">PREDICTION RELIABILITY</div><div id="kReliab" class="text-lg font-bold">—</div></div>
+    <div class="card p-2.5"><div class="text-[10px] text-gray-500">UPTIME</div><div id="kUptime" class="text-lg font-bold mono">—</div></div>
+    <div class="card p-2.5"><div class="text-[10px] text-gray-500">PHASE</div><div id="kPhase" class="text-sm font-bold mt-1">—</div></div>
   </div>
 
   <!-- TABS -->
-  <nav class="flex gap-1 mb-4 text-sm">
-    <button data-tab="overview"  class="tab px-4 py-2 rounded-lg">Overview</button>
-    <button data-tab="symbols"   class="tab px-4 py-2 rounded-lg">Symbols</button>
-    <button data-tab="accuracy"  class="tab px-4 py-2 rounded-lg">Prediction Accuracy</button>
-    <button data-tab="paper"     class="tab px-4 py-2 rounded-lg">Paper Trading</button>
-    <button data-tab="risk"      class="tab px-4 py-2 rounded-lg">Risk Console</button>
+  <nav class="flex flex-wrap gap-1 mb-3 text-sm">
+    <button data-tab="overview"    class="tab px-3.5 py-1.5 rounded-lg">Command Center</button>
+    <button data-tab="progress"    class="tab px-3.5 py-1.5 rounded-lg">Progress</button>
+    <button data-tab="symbols"     class="tab px-3.5 py-1.5 rounded-lg">Symbols</button>
+    <button data-tab="regimes"     class="tab px-3.5 py-1.5 rounded-lg">Regimes</button>
+    <button data-tab="calibration" class="tab px-3.5 py-1.5 rounded-lg">Calibration</button>
+    <button data-tab="accuracy"    class="tab px-3.5 py-1.5 rounded-lg">Accuracy</button>
+    <button data-tab="paper"       class="tab px-3.5 py-1.5 rounded-lg">Paper Trading</button>
+    <button data-tab="risk"        class="tab px-3.5 py-1.5 rounded-lg">Risk Console</button>
   </nav>
 
+  <!-- COMMAND CENTER -->
   <section id="tab-overview" class="tab-panel">
-    <div class="card p-4 mb-4"><div class="text-sm text-gray-400 mb-2">Safety score timeline</div>
-      <div id="safetyChart" style="height:260px"></div></div>
-    <div class="grid md:grid-cols-2 gap-4">
-      <div class="card p-4"><div class="text-sm text-gray-400 mb-2">Cleanest paper conditions</div><div id="bestSymbols"></div></div>
-      <div class="card p-4"><div class="text-sm text-gray-400 mb-2">Most dangerous right now</div><div id="worstSymbols"></div></div>
+    <div class="grid lg:grid-cols-3 gap-3">
+      <div class="card p-4 lg:col-span-2">
+        <div class="text-xs text-gray-500 mb-2">Safety score timeline</div>
+        <div id="safetyChart" style="height:220px"></div>
+      </div>
+      <div class="card p-4">
+        <div class="text-xs text-gray-500 mb-2">⏱ What is it doing right now?</div>
+        <div id="nowPanel" class="text-sm"></div>
+      </div>
+    </div>
+    <div class="grid lg:grid-cols-3 gap-3 mt-3">
+      <div class="card p-4"><div class="text-xs text-gray-500 mb-2">Cleanest paper conditions</div><div id="bestSymbols"></div></div>
+      <div class="card p-4"><div class="text-xs text-gray-500 mb-2">Most dangerous right now</div><div id="worstSymbols"></div></div>
+      <div class="card p-4"><div class="text-xs text-gray-500 mb-2">⚡ Bot activity feed</div>
+        <div id="activityFeed" class="text-xs space-y-1 max-h-[230px] overflow-y-auto"></div></div>
     </div>
   </section>
 
+  <!-- PROGRESS -->
+  <section id="tab-progress" class="tab-panel hidden">
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-2.5 mb-3">
+      <div class="card p-3"><div class="text-[10px] text-gray-500">DAY</div><div id="pgDay" class="text-2xl font-black mono"></div></div>
+      <div class="card p-3"><div class="text-[10px] text-gray-500">LEARNING PROGRESS</div><div id="pgProgress" class="text-2xl font-black mono"></div></div>
+      <div class="card p-3"><div class="text-[10px] text-gray-500">CYCLES COMPLETED</div><div id="pgCycles" class="text-2xl font-black mono"></div></div>
+      <div class="card p-3"><div class="text-[10px] text-gray-500">UPTIME</div><div id="pgUptime" class="text-2xl font-black mono"></div></div>
+      <div class="card p-3"><div class="text-[10px] text-gray-500">PREDICTIONS MADE</div><div id="pgPreds" class="text-2xl font-black mono"></div></div>
+      <div class="card p-3"><div class="text-[10px] text-gray-500">PREDICTIONS EVALUATED</div><div id="pgEval" class="text-2xl font-black mono"></div></div>
+      <div class="card p-3"><div class="text-[10px] text-gray-500">FAKE TRADES</div><div id="pgTrades" class="text-2xl font-black mono"></div></div>
+      <div class="card p-3"><div class="text-[10px] text-gray-500">CURRENT PHASE</div><div id="pgPhase" class="text-base font-bold mt-2"></div></div>
+    </div>
+    <div class="card p-4 mb-3">
+      <div class="text-xs text-gray-500 mb-1">Learning progress</div>
+      <div class="w-full bg-gray-800 rounded-full h-4"><div id="pgBar" class="h-4 rounded-full bg-sky-500" style="width:0%"></div></div>
+      <div id="pgBarLabel" class="text-xs text-gray-400 mt-1"></div>
+    </div>
+    <div class="card p-4">
+      <div class="text-xs text-gray-500 mb-3">Day timeline — green: ran well · yellow: partial data · red: errors / downtime</div>
+      <div id="dayTimeline" class="flex flex-wrap gap-1.5"></div>
+    </div>
+    <div class="card p-4 mt-3">
+      <div class="text-xs text-gray-500 mb-2">Paper Strategy Readiness</div>
+      <div id="readinessPanel"></div>
+    </div>
+  </section>
+
+  <!-- SYMBOLS -->
   <section id="tab-symbols" class="tab-panel hidden">
-    <div class="card p-4 overflow-x-auto">
+    <div class="card p-3 overflow-x-auto">
       <table><thead><tr>
-        <th>Symbol</th><th>Price</th><th>Trend</th><th>Volatility</th><th>Liquidity</th>
-        <th>Spread</th><th>Prediction</th><th>Confidence</th><th>Recent acc.</th>
-        <th>Safety</th><th>Status</th>
+        <th>Symbol</th><th>Price</th><th>Trend</th><th>Vol</th><th>Liquidity</th>
+        <th>Spread</th><th>Chop</th><th>Prediction</th><th>Conf.</th>
+        <th>Recent acc.</th><th>Safety</th><th>Status</th>
       </tr></thead><tbody id="symbolRows"></tbody></table>
     </div>
-    <div id="symbolDetail" class="card p-4 mt-4 hidden">
+    <div id="symbolDetail" class="card p-4 mt-3 hidden">
       <div class="flex items-center justify-between mb-2">
         <div id="detailTitle" class="text-lg font-bold"></div>
         <button id="closeDetail" class="text-xs text-gray-400">close ✕</button>
       </div>
-      <div id="detailChart" style="height:280px"></div>
-      <div id="detailMeta" class="text-sm text-gray-400 mt-2"></div>
+      <div class="grid lg:grid-cols-2 gap-3">
+        <div><div class="text-xs text-gray-500 mb-1">Price + prediction markers</div>
+          <div id="detailPrice" style="height:230px"></div></div>
+        <div><div class="text-xs text-gray-500 mb-1">RSI / MACD</div>
+          <div id="detailTech" style="height:230px"></div></div>
+      </div>
+      <div id="detailMeta" class="text-xs text-gray-400 mt-2"></div>
+      <div class="grid lg:grid-cols-2 gap-3 mt-3">
+        <div class="card p-3"><div class="text-xs text-gray-500 mb-1">Prediction history</div>
+          <div id="detailPreds" class="text-xs max-h-48 overflow-y-auto"></div></div>
+        <div class="card p-3"><div class="text-xs text-gray-500 mb-1">Paper trade history</div>
+          <div id="detailTrades" class="text-xs max-h-48 overflow-y-auto"></div></div>
+      </div>
     </div>
   </section>
 
+  <!-- REGIMES -->
+  <section id="tab-regimes" class="tab-panel hidden">
+    <div class="card p-4 mb-3"><div class="text-xs text-gray-500 mb-2">Regime / safety-score timeline</div>
+      <div id="regimeChart" style="height:240px"></div></div>
+    <div class="card p-4"><div class="text-xs text-gray-500 mb-2">Performance by regime — which regimes the strategy works / fails in</div>
+      <table><thead><tr><th>Regime</th><th>Observations</th><th>Accuracy</th><th>Fake PnL</th><th>Verdict</th></tr></thead>
+      <tbody id="regimeRows"></tbody></table></div>
+  </section>
+
+  <!-- CALIBRATION -->
+  <section id="tab-calibration" class="tab-panel hidden">
+    <div class="card p-4 mb-3"><div class="text-xs text-gray-500 mb-2">Confidence calibration — when the bot says X%, is it actually right X%?</div>
+      <div id="calibChart" style="height:260px"></div></div>
+    <div class="card p-4 mb-3 overflow-x-auto">
+      <table><thead><tr><th>Confidence bucket</th><th>Samples</th><th>Stated</th><th>Actual accuracy</th><th>Gap</th><th>Flag</th></tr></thead>
+      <tbody id="calibRows"></tbody></table>
+    </div>
+    <div class="card p-4 border-yellow-700"><div class="text-sm text-yellow-400 mb-1">⚠ Notice</div>
+      <div id="calibWarnings" class="text-xs text-yellow-200"></div></div>
+  </section>
+
+  <!-- ACCURACY -->
   <section id="tab-accuracy" class="tab-panel hidden">
-    <div class="grid md:grid-cols-3 gap-4 mb-4">
-      <div class="card p-4"><div class="text-xs text-gray-500">OVERALL ACCURACY</div><div id="accOverall" class="text-2xl font-bold"></div></div>
-      <div class="card p-4"><div class="text-xs text-gray-500">EVALUATED PREDICTIONS</div><div id="accTotal" class="text-2xl font-bold"></div></div>
-      <div class="card p-4"><div class="text-xs text-gray-500">MODEL VERDICT</div><div id="accVerdict" class="text-2xl font-bold"></div></div>
+    <div class="grid md:grid-cols-3 gap-3 mb-3">
+      <div class="card p-4"><div class="text-[10px] text-gray-500">OVERALL ACCURACY</div><div id="accOverall" class="text-2xl font-bold mono"></div></div>
+      <div class="card p-4"><div class="text-[10px] text-gray-500">EVALUATED PREDICTIONS</div><div id="accTotal" class="text-2xl font-bold mono"></div></div>
+      <div class="card p-4"><div class="text-[10px] text-gray-500">MODEL VERDICT</div><div id="accVerdict" class="text-xl font-bold"></div></div>
     </div>
-    <div class="grid md:grid-cols-2 gap-4">
-      <div class="card p-4"><div class="text-sm text-gray-400 mb-2">Accuracy by symbol</div><div id="accBySymbol"></div></div>
-      <div class="card p-4"><div class="text-sm text-gray-400 mb-2">Accuracy by regime</div><div id="accByRegime"></div></div>
+    <div class="grid md:grid-cols-2 gap-3">
+      <div class="card p-4"><div class="text-xs text-gray-500 mb-2">Accuracy by symbol</div><div id="accBySymbol" class="text-sm"></div></div>
+      <div class="card p-4"><div class="text-xs text-gray-500 mb-2">Accuracy by regime</div><div id="accByRegime" class="text-sm"></div></div>
     </div>
-    <div class="card p-4 mt-4"><div class="text-sm text-gray-400 mb-2">Confidence calibration</div><div id="accCalibration"></div></div>
-    <div class="card p-4 mt-4 border-yellow-700"><div class="text-sm text-yellow-400 mb-2">⚠ False-confidence warnings</div><div id="accWarnings"></div></div>
+    <div class="card p-4 mt-3 border-yellow-700"><div class="text-sm text-yellow-400 mb-1">⚠ False-confidence warnings</div>
+      <div id="accWarnings" class="text-xs"></div></div>
   </section>
 
+  <!-- PAPER -->
   <section id="tab-paper" class="tab-panel hidden">
-    <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
-      <div class="card p-3"><div class="text-xs text-gray-500">EQUITY</div><div id="pEquity" class="text-lg font-bold"></div></div>
-      <div class="card p-3"><div class="text-xs text-gray-500">SIM PnL</div><div id="pPnl" class="text-lg font-bold"></div></div>
-      <div class="card p-3"><div class="text-xs text-gray-500">WIN RATE</div><div id="pWin" class="text-lg font-bold"></div></div>
-      <div class="card p-3"><div class="text-xs text-gray-500">MAX DRAWDOWN</div><div id="pDd" class="text-lg font-bold"></div></div>
-      <div class="card p-3"><div class="text-xs text-gray-500">FEES / SLIPPAGE</div><div id="pFees" class="text-lg font-bold"></div></div>
+    <div class="grid grid-cols-2 md:grid-cols-5 gap-2.5 mb-3">
+      <div class="card p-3"><div class="text-[10px] text-gray-500">EQUITY</div><div id="pEquity" class="text-lg font-bold mono"></div></div>
+      <div class="card p-3"><div class="text-[10px] text-gray-500">SIM PNL</div><div id="pPnl" class="text-lg font-bold mono"></div></div>
+      <div class="card p-3"><div class="text-[10px] text-gray-500">WIN RATE</div><div id="pWin" class="text-lg font-bold mono"></div></div>
+      <div class="card p-3"><div class="text-[10px] text-gray-500">MAX DRAWDOWN</div><div id="pDd" class="text-lg font-bold mono"></div></div>
+      <div class="card p-3"><div class="text-[10px] text-gray-500">FEES / SLIPPAGE</div><div id="pFees" class="text-lg font-bold mono"></div></div>
     </div>
-    <div class="card p-4 mb-4"><div class="text-sm text-gray-400 mb-2">Open simulated positions</div><div id="pOpen"></div></div>
-    <div class="card p-4 overflow-x-auto"><div class="text-sm text-gray-400 mb-2">Closed simulated trades</div>
+    <div class="card p-4 mb-3"><div class="text-xs text-gray-500 mb-2">Open simulated positions</div><div id="pOpen" class="text-sm"></div></div>
+    <div class="card p-3 overflow-x-auto"><div class="text-xs text-gray-500 mb-2">Closed simulated trades</div>
       <table><thead><tr><th>Symbol</th><th>Side</th><th>Entry</th><th>Exit</th><th>PnL</th><th>Fees</th></tr></thead>
       <tbody id="pClosed"></tbody></table></div>
   </section>
 
+  <!-- RISK -->
   <section id="tab-risk" class="tab-panel hidden">
-    <div class="grid md:grid-cols-3 gap-4 mb-4">
-      <div class="card p-4"><div class="text-sm text-red-400 mb-2">Panic / illiquid / choppy</div><div id="riskHazards"></div></div>
-      <div class="card p-4"><div class="text-sm text-yellow-400 mb-2">Model degradation</div><div id="riskModel"></div></div>
-      <div class="card p-4"><div class="text-sm text-orange-400 mb-2">Skipped symbols</div><div id="riskSkipped"></div></div>
+    <div class="grid md:grid-cols-3 gap-3 mb-3">
+      <div class="card p-4"><div class="text-sm text-red-400 mb-2">Panic / illiquid / choppy</div><div id="riskHazards" class="text-xs"></div></div>
+      <div class="card p-4"><div class="text-sm text-yellow-400 mb-2">Model degradation</div><div id="riskModel" class="text-xs"></div></div>
+      <div class="card p-4"><div class="text-sm text-orange-400 mb-2">Skipped symbols</div><div id="riskSkipped" class="text-xs"></div></div>
     </div>
-    <div class="card p-4"><div class="text-sm text-gray-400 mb-2">Recent alerts & errors</div><div id="riskErrors"></div></div>
+    <div class="card p-4"><div class="text-xs text-gray-500 mb-2">Recent alerts & errors</div><div id="riskErrors" class="text-xs"></div></div>
   </section>
 
-  <footer class="text-center text-xs text-gray-600 mt-6">
-    daytrade Market Safety Observatory · paper-only · conditions analysis, not financial advice ·
-    <span id="updated"></span>
+  <footer class="text-center text-[11px] text-gray-700 mt-5">
+    daytrade · paper / simulation only · no real trading · no wallets · no bank transfers ·
+    conditions analysis, never financial advice · <span id="updated"></span>
   </footer>
 </div>
 
 <script>
 const STATUS_COLOR = {
-  SAFE_TO_OBSERVE: ['#064e3b','#10b981'], WAIT: ['#422006','#eab308'],
-  HIGH_RISK: ['#431407','#f97316'], UNSAFE: ['#450a0a','#ef4444']
+  SAFE_TO_OBSERVE:['#06281d','#10b981'], WAIT:['#2a2207','#eab308'],
+  HIGH_RISK:['#2e1407','#f97316'], UNSAFE:['#2c0a0a','#ef4444']
 };
-const STATUS_BADGE = {
-  'GOOD PAPER CONDITIONS':'bg-emerald-900 text-emerald-300',
-  'WATCH ONLY':'bg-slate-700 text-slate-300',
-  'TOO CHOPPY':'bg-orange-900 text-orange-300',
-  'TOO ILLIQUID':'bg-orange-900 text-orange-300',
-  'PANIC':'bg-red-900 text-red-300',
-  'MODEL UNRELIABLE':'bg-red-900 text-red-300'
+const BADGE = {
+  'GOOD PAPER CONDITIONS':'bg-emerald-900 text-emerald-300','WATCH ONLY':'bg-slate-700 text-slate-300',
+  'TOO CHOPPY':'bg-orange-900 text-orange-300','TOO ILLIQUID':'bg-orange-900 text-orange-300',
+  'PANIC':'bg-red-900 text-red-300','MODEL UNRELIABLE':'bg-red-900 text-red-300','COOLDOWN':'bg-slate-700 text-slate-300'
 };
-let safetyChart, detailChart;
-const fmt = (n,d=2) => (n==null||isNaN(n)) ? '—' : Number(n).toLocaleString(undefined,{maximumFractionDigits:d});
-const pct = n => (n==null||isNaN(n)) ? '—' : Number(n).toFixed(1)+'%';
+let charts = {};
+const fmt=(n,d=2)=>(n==null||isNaN(n))?'—':Number(n).toLocaleString(undefined,{maximumFractionDigits:d});
+const pct=n=>(n==null||isNaN(n))?'—':Number(n).toFixed(1)+'%';
+async function api(p){ try{ const r=await fetch(p); return await r.json(); }catch(e){ return {error:String(e)}; } }
+function chart(id){ if(!charts[id]){ const el=document.getElementById(id); if(el) charts[id]=echarts.init(el,'dark'); } return charts[id]; }
 
-async function api(path){ try{ const r=await fetch(path); return await r.json(); }catch(e){ return {error:String(e)}; } }
-
-function renderOverview(o){
-  if(!o || o.error) return;
-  const [bg,fg] = STATUS_COLOR[o.status] || STATUS_COLOR.WAIT;
-  const card = document.getElementById('statusCard');
-  card.style.background = bg; card.style.borderColor = fg;
-  document.getElementById('statusText').textContent = (o.status||'—').replace(/_/g,' ');
-  document.getElementById('statusText').style.color = fg;
-  document.getElementById('scoreText').textContent = `SAFETY SCORE: ${fmt(o.safety_score,0)} / 100`;
-  document.getElementById('reasonText').textContent = 'REASON: ' + ((o.reasons||[]).join(' · ') || '—');
-  const cond = document.getElementById('conditionText');
-  cond.textContent = 'CONDITION: ' + (o.condition||'—');
-  cond.style.background = fg; cond.style.color = '#0b0f17';
-  document.getElementById('kpiEquity').textContent = fmt(o.equity,0);
-  document.getElementById('kpiDrawdown').textContent = pct((o.drawdown_pct||0)*100);
-  document.getElementById('kpiAccuracy').textContent = pct(o.prediction_accuracy);
-  document.getElementById('kpiReliable').textContent = o.model_reliable ? 'YES' : 'NO';
-  document.getElementById('kpiReliable').style.color = o.model_reliable ? '#10b981':'#ef4444';
-  const live = o.bot_running;
-  document.getElementById('botStatus').innerHTML =
-    `<span style="color:${live?'#10b981':'#ef4444'}">●</span> Bot ${live?'RUNNING':'OFFLINE'} `+
-    `<span class="text-gray-500">· ${o.cycles||0} cycles · ${o.bot_status||''}</span>`;
-  document.getElementById('updated').textContent = 'updated ' + (o.updated||'').slice(11,19) + ' UTC';
-  const mini = s => `<div class="flex justify-between py-1 border-b border-gray-800">
-     <span class="font-semibold">${s.symbol}</span>
-     <span>${fmt(s.safety_score,0)} · <span class="text-gray-400">${s.status}</span></span></div>`;
-  document.getElementById('bestSymbols').innerHTML = (o.best_symbols||[]).map(mini).join('') || '—';
-  document.getElementById('worstSymbols').innerHTML = (o.worst_symbols||[]).map(mini).join('') || '—';
+function renderTop(o, pr, rd){
+  if(o && !o.error){
+    const [bg,fg]=STATUS_COLOR[o.status]||STATUS_COLOR.WAIT;
+    const card=document.getElementById('statusCard');
+    card.style.background=bg; card.style.borderColor=fg;
+    const st=document.getElementById('statusText');
+    st.textContent=(o.status||'—').replace(/_/g,' '); st.style.color=fg;
+    document.getElementById('scoreText').textContent=`SAFETY ${fmt(o.safety_score,0)}/100`;
+    const cc=document.getElementById('conditionText');
+    cc.textContent=o.condition||'—'; cc.style.background=fg; cc.style.color='#0a0d14';
+    document.getElementById('reasonText').textContent='REASON: '+((o.reasons||[]).join(' · ')||'—');
+    document.getElementById('kPnl').textContent=(o.equity!=null)?
+      ((o.equity-o.starting_cash>=0?'+':'')+pct((o.equity/o.starting_cash-1)*100)):'—';
+    const rel=o.model_reliable?'OK':'LOW';
+    document.getElementById('kReliab').textContent=o.prediction_accuracy!=null?
+      (pct(o.prediction_accuracy)+' · '+rel):'building';
+    const live=o.bot_running;
+    document.getElementById('botStatus').innerHTML=
+      `<span style="color:${live?'#10b981':'#ef4444'}">●</span> BOT ${live?'RUNNING':'OFFLINE'} `+
+      `<span class="text-gray-600">· ${o.bot_status||''}</span>`;
+    document.getElementById('updated').textContent='updated '+((o.updated||'').slice(11,19))+' UTC';
+  }
+  if(pr && !pr.error){
+    document.getElementById('kDay').textContent=`${pr.current_day||0}/${pr.target_days||30}`;
+    document.getElementById('kProgress').textContent=pct(pr.progress_pct);
+    document.getElementById('kUptime').textContent=pct(pr.uptime_pct);
+    document.getElementById('kPhase').textContent=pr.current_phase||'—';
+  }
+  if(rd && !rd.error){
+    const chip=document.getElementById('readinessChip');
+    chip.textContent='READINESS '+fmt(rd.score,0)+(rd.capped?' (capped)':'');
+    chip.style.background='#1e2633'; chip.style.color='#9ca3af';
+  }
 }
 
-async function renderSafetyHistory(){
-  const h = await api('/api/safety-history');
-  if(!Array.isArray(h)) return;
-  if(!safetyChart) safetyChart = echarts.init(document.getElementById('safetyChart'),'dark');
-  safetyChart.setOption({
-    backgroundColor:'transparent', grid:{left:40,right:20,top:20,bottom:30},
-    xAxis:{type:'category',data:h.map(x=>(x.ts||'').slice(11,16)),axisLabel:{color:'#6b7280'}},
-    yAxis:{type:'value',min:0,max:100,axisLabel:{color:'#6b7280'}},
-    series:[{type:'line',smooth:true,data:h.map(x=>x.score),areaStyle:{opacity:0.2},
-             lineStyle:{color:'#38bdf8'},itemStyle:{color:'#38bdf8'}}],
-    tooltip:{trigger:'axis'}
-  });
+async function renderOverview(){
+  const o=await api('/api/overview');
+  if(o && !o.error){
+    const mini=s=>`<div class="flex justify-between py-1 border-b border-gray-800">
+      <span class="font-semibold">${s.symbol}</span>
+      <span class="mono">${fmt(s.safety_score,0)} · <span class="text-gray-500">${s.status}</span></span></div>`;
+    document.getElementById('bestSymbols').innerHTML=(o.best_symbols||[]).map(mini).join('')||'—';
+    document.getElementById('worstSymbols').innerHTML=(o.worst_symbols||[]).map(mini).join('')||'—';
+  }
+  const h=await api('/api/safety-history');
+  if(Array.isArray(h)){
+    chart('safetyChart').setOption({backgroundColor:'transparent',grid:{left:36,right:14,top:14,bottom:26},
+      xAxis:{type:'category',data:h.map(x=>(x.ts||'').slice(11,16)),axisLabel:{color:'#6b7280',fontSize:10}},
+      yAxis:{type:'value',min:0,max:100,axisLabel:{color:'#6b7280'}},tooltip:{trigger:'axis'},
+      series:[{type:'line',smooth:true,data:h.map(x=>x.score),areaStyle:{opacity:0.18},
+        lineStyle:{color:'#38bdf8'},itemStyle:{color:'#38bdf8'}}]});
+  }
+  const act=await api('/api/activity');
+  if(Array.isArray(act)){
+    const ic={info:'·',warning:'⚠',critical:'‼'};
+    document.getElementById('activityFeed').innerHTML=act.map(e=>
+      `<div><span class="text-gray-600">${(e.ts||'').slice(11,19)}</span>
+       <span class="${e.level==='critical'?'text-red-400':e.level==='warning'?'text-yellow-400':'text-gray-300'}">
+       ${ic[e.level]||'·'} ${e.event}</span>
+       ${e.detail?`<span class="text-gray-600">— ${e.detail}</span>`:''}</div>`).join('')
+      ||'<span class="text-gray-600">No activity yet — start the observer.</span>';
+  }
+}
+
+function renderNow(s){
+  if(!s||s.error) return;
+  const steps=s.steps||[];
+  const cur=s.current_step;
+  document.getElementById('nowPanel').innerHTML=
+    `<div class="mb-2">Cycle <b class="mono">#${s.cycle||0}</b> · phase <b>${s.phase||'—'}</b>
+      · <span class="${s.bot_running?'text-emerald-400':'text-red-400'}">${s.bot_running?'live':'offline'}</span></div>`+
+    `<div class="text-gray-500 mb-1">Current symbol: <b class="text-gray-300">${s.current_symbol||'—'}</b>
+      · errors this cycle: ${s.errors_this_cycle||0}</div>`+
+    steps.map(st=>`<div class="${st===cur?'text-sky-300 font-semibold':'text-gray-600'}">
+      ${st===cur?'▶':'·'} ${st}</div>`).join('')+
+    `<div class="text-gray-600 mt-2">Next cycle: ${(s.next_cycle_at||'—').slice(11,19)}</div>`;
+}
+
+async function renderProgress(){
+  const p=await api('/api/progress');
+  if(!p||p.error) return;
+  document.getElementById('pgDay').textContent=`${p.current_day||0}/${p.target_days||30}`;
+  document.getElementById('pgProgress').textContent=pct(p.progress_pct);
+  document.getElementById('pgCycles').textContent=`${fmt(p.cycles_completed,0)}`;
+  document.getElementById('pgUptime').textContent=pct(p.uptime_pct);
+  document.getElementById('pgPreds').textContent=fmt(p.predictions_made,0);
+  document.getElementById('pgEval').textContent=fmt(p.predictions_evaluated,0);
+  document.getElementById('pgTrades').textContent=fmt(p.fake_trades,0);
+  document.getElementById('pgPhase').textContent=p.current_phase||'—';
+  document.getElementById('pgBar').style.width=Math.min(100,p.progress_pct||0)+'%';
+  document.getElementById('pgBarLabel').textContent=
+    `${fmt(p.cycles_completed,0)} / ${fmt(p.total_expected_cycles,0)} expected cycles · `+
+    `${fmt(p.days_remaining,1)} days remaining · status ${p.status}`;
+  const tl=p.day_timeline||[];
+  const colors={green:'#10b981',yellow:'#eab308',red:'#ef4444'};
+  let cells='';
+  for(let d=1; d<=(p.target_days||30); d++){
+    const m=tl.find(x=>x.day===d);
+    const c=m?colors[m.status]||'#374151':'#1e2633';
+    const title=m?`Day ${d}: ${m.status}, uptime ${pct(m.uptime_pct)}, acc ${pct(m.accuracy)}`:`Day ${d}: upcoming`;
+    cells+=`<div title="${title}" style="background:${c}"
+      class="w-9 h-9 rounded flex items-center justify-center text-[10px] font-bold text-black/70">${d}</div>`;
+  }
+  document.getElementById('dayTimeline').innerHTML=cells;
+  const rd=await api('/api/readiness');
+  if(rd && !rd.error){
+    const bd=Object.entries(rd.breakdown||{}).map(([k,v])=>
+      `<div class="flex justify-between py-0.5 border-b border-gray-800"><span>${k}</span><span class="mono">${fmt(v,0)}</span></div>`).join('');
+    document.getElementById('readinessPanel').innerHTML=
+      `<div class="text-3xl font-black mono mb-1">${fmt(rd.score,0)}/100</div>`+
+      `<div class="text-sm font-bold mb-2">${rd.level}${rd.capped?' · capped (pre day-30)':''}</div>`+
+      `<div class="text-xs">${bd}</div>`+
+      (rd.blockers&&rd.blockers.length?`<div class="text-xs text-yellow-300 mt-2">`+
+        rd.blockers.map(b=>'• '+b).join('<br>')+'</div>':'')+
+      `<div class="text-[11px] text-gray-600 mt-2">${rd.notice||''}</div>`;
+  }
 }
 
 async function renderSymbols(){
-  const rows = await api('/api/symbols');
+  const rows=await api('/api/symbols');
   if(!Array.isArray(rows)) return;
-  document.getElementById('symbolRows').innerHTML = rows.map(r=>{
-    const badge = STATUS_BADGE[r.status] || 'bg-slate-700 text-slate-300';
-    const trendIcon = r.trend==='up'?'▲':r.trend==='down'?'▼':'▬';
-    return `<tr class="hover:bg-gray-800 cursor-pointer" onclick="openDetail('${r.symbol}')">
-      <td class="font-semibold">${r.symbol}</td><td>${fmt(r.price,4)}</td>
-      <td>${trendIcon} ${r.trend}</td><td>${pct((r.volatility||0)*100)}</td>
-      <td>$${fmt(r.liquidity,0)}</td><td>${fmt(r.spread_bps,1)} bps</td>
-      <td>${(r.prediction||'—').toUpperCase()}</td><td>${r.confidence==null?'—':fmt(r.confidence*100,0)+'%'}</td>
-      <td>${r.recent_accuracy==null?'—':fmt(r.recent_accuracy*100,0)+'%'}</td>
-      <td class="font-bold">${fmt(r.safety_score,0)}</td>
-      <td><span class="px-2 py-0.5 rounded text-xs ${badge}">${r.status}</span></td></tr>`;
-  }).join('') || '<tr><td colspan="11" class="text-gray-500">No data yet — start the observer.</td></tr>';
+  document.getElementById('symbolRows').innerHTML=rows.map(r=>{
+    const badge=BADGE[r.status]||'bg-slate-700 text-slate-300';
+    const ti=r.trend==='up'?'<span class="text-emerald-400">▲</span>':
+      r.trend==='down'?'<span class="text-red-400">▼</span>':'<span class="text-gray-500">▬</span>';
+    return `<tr class="clk" onclick="openDetail('${r.symbol}')">
+      <td class="font-semibold">${r.symbol}</td><td class="mono">${fmt(r.price,4)}</td>
+      <td>${ti} ${r.trend}</td><td class="mono">${pct((r.volatility||0)*100)}</td>
+      <td class="mono">$${fmt(r.liquidity,0)}</td><td class="mono">${fmt(r.spread_bps,1)}bps</td>
+      <td>${r.chop?'<span class="text-orange-400">chop</span>':'<span class="text-gray-600">no</span>'}</td>
+      <td>${(r.prediction||'—').toUpperCase()}</td>
+      <td class="mono">${r.confidence==null?'—':fmt(r.confidence*100,0)+'%'}</td>
+      <td class="mono">${r.recent_accuracy==null?'—':fmt(r.recent_accuracy*100,0)+'%'}</td>
+      <td class="font-bold mono">${fmt(r.safety_score,0)}</td>
+      <td><span class="px-1.5 py-0.5 rounded text-[11px] ${badge}">${r.status}</span></td></tr>`;
+  }).join('')||'<tr><td colspan="12" class="text-gray-600">No data yet — run the learn/observe command.</td></tr>';
 }
 
 async function openDetail(symbol){
-  const d = await api('/api/symbol/'+symbol);
-  if(!d || d.error) return;
+  const d=await api('/api/symbols/'+symbol);
+  if(!d||d.error) return;
   document.getElementById('symbolDetail').classList.remove('hidden');
-  document.getElementById('detailTitle').textContent = symbol + ' — detail';
-  const s = d.series||[];
-  if(!detailChart) detailChart = echarts.init(document.getElementById('detailChart'),'dark');
-  const preds = (d.predictions||[]).filter(p=>p.direction!=='hold').map(p=>({
-    xAxis:(p.ts||'').slice(11,16),
-    label:{formatter:p.direction==='buy'?'B':'S'}}));
-  detailChart.setOption({
-    backgroundColor:'transparent', grid:{left:50,right:20,top:20,bottom:30},
-    xAxis:{type:'category',data:s.map(x=>(x.ts||'').slice(11,16)),axisLabel:{color:'#6b7280'}},
-    yAxis:{type:'value',scale:true,axisLabel:{color:'#6b7280'}},
-    tooltip:{trigger:'axis'},
-    series:[{type:'line',smooth:true,data:s.map(x=>x.price),lineStyle:{color:'#38bdf8'},
-             markPoint:{data:preds,symbolSize:26}}]
-  });
-  const h=d.health||{}, last=s[s.length-1]||{};
-  document.getElementById('detailMeta').innerHTML =
+  document.getElementById('detailTitle').textContent=symbol+' — detail';
+  const s=d.series||[];
+  const x=s.map(p=>(p.ts||'').slice(11,16));
+  const preds=(d.predictions||[]).filter(p=>p.direction!=='hold').map(p=>({
+    xAxis:(p.ts||'').slice(11,16),label:{formatter:p.direction==='buy'?'B':'S'}}));
+  chart('detailPrice').setOption({backgroundColor:'transparent',grid:{left:48,right:14,top:14,bottom:26},
+    xAxis:{type:'category',data:x,axisLabel:{color:'#6b7280',fontSize:9}},
+    yAxis:{type:'value',scale:true,axisLabel:{color:'#6b7280'}},tooltip:{trigger:'axis'},
+    series:[{type:'line',smooth:true,data:s.map(p=>p.price),lineStyle:{color:'#38bdf8'},
+      markPoint:{data:preds,symbolSize:22}}]});
+  chart('detailTech').setOption({backgroundColor:'transparent',grid:{left:40,right:14,top:24,bottom:26},
+    legend:{textStyle:{color:'#8b95a5'},top:0},
+    xAxis:{type:'category',data:x,axisLabel:{color:'#6b7280',fontSize:9}},
+    yAxis:{type:'value',axisLabel:{color:'#6b7280'}},tooltip:{trigger:'axis'},
+    series:[{name:'RSI',type:'line',smooth:true,data:s.map(p=>p.rsi),lineStyle:{color:'#a78bfa'}},
+      {name:'MACD',type:'line',smooth:true,data:s.map(p=>p.macd),lineStyle:{color:'#f59e0b'}}]});
+  const last=s[s.length-1]||{}, h=d.health||{};
+  document.getElementById('detailMeta').innerHTML=
     `RSI ${fmt(last.rsi,1)} · MACD ${fmt(last.macd,3)} · vol ${pct((last.volatility||0)*100)} · `+
     `spread ${fmt(last.spread_bps,1)}bps · imbalance ${fmt(last.imbalance,2)} · `+
-    `chop ${last.chop?'YES':'no'} · safety ${fmt(h.safety_score,0)} · status ${h.status||'—'} · `+
-    `${(d.predictions||[]).length} predictions · ${(d.paper_trades?.closed||[]).length} closed paper trades`;
+    `chop ${last.chop?'YES':'no'} · safety ${fmt(h.safety_score,0)} · status ${h.status||'—'}`;
+  document.getElementById('detailPreds').innerHTML=(d.predictions||[]).slice(0,40).map(p=>
+    `<div class="py-0.5 border-b border-gray-800"><span class="text-gray-600">${(p.ts||'').slice(11,16)}</span>
+     ${(p.direction||'').toUpperCase()} conf ${fmt((p.confidence||0)*100,0)}% · ${p.condition||''}</div>`).join('')
+    ||'<span class="text-gray-600">none</span>';
+  const tr=(d.paper_trades||{}).closed||[];
+  document.getElementById('detailTrades').innerHTML=tr.slice(0,40).map(t=>{
+    const c=(t.pnl||0)>=0?'text-emerald-400':'text-red-400';
+    return `<div class="py-0.5 border-b border-gray-800">${fmt(t.entry_price,4)}→${fmt(t.exit_price,4)}
+      <span class="${c}">${(t.pnl>=0?'+':'')+fmt(t.pnl,2)}</span> fee ${fmt(t.fees,2)}</div>`;
+  }).join('')||'<span class="text-gray-600">no closed paper trades</span>';
   document.getElementById('symbolDetail').scrollIntoView({behavior:'smooth'});
 }
-document.getElementById('closeDetail').onclick = ()=>document.getElementById('symbolDetail').classList.add('hidden');
+document.getElementById('closeDetail').onclick=()=>document.getElementById('symbolDetail').classList.add('hidden');
+
+async function renderRegimes(){
+  const r=await api('/api/regimes');
+  if(!r||r.error) return;
+  const tl=r.timeline||[];
+  chart('regimeChart').setOption({backgroundColor:'transparent',grid:{left:36,right:14,top:14,bottom:26},
+    xAxis:{type:'category',data:tl.map(x=>(x.ts||'').slice(5,16)),axisLabel:{color:'#6b7280',fontSize:9}},
+    yAxis:{type:'value',min:0,max:100,axisLabel:{color:'#6b7280'}},tooltip:{trigger:'axis'},
+    series:[{type:'line',step:'middle',data:tl.map(x=>x.safety_score),lineStyle:{color:'#22d3ee'},
+      areaStyle:{opacity:0.15}}]});
+  const verdict=(a)=>a==null?'—':a>=55?'<span class="text-emerald-400">works</span>':
+    a>=48?'<span class="text-yellow-400">marginal</span>':'<span class="text-red-400">fails</span>';
+  document.getElementById('regimeRows').innerHTML=Object.entries(r.by_regime||{}).map(([k,g])=>{
+    const c=(g.fake_pnl||0)>=0?'text-emerald-400':'text-red-400';
+    return `<tr><td class="font-semibold">${k}</td><td class="mono">${g.samples}</td>
+      <td class="mono">${pct(g.accuracy)}</td><td class="mono ${c}">${(g.fake_pnl>=0?'+':'')+fmt(g.fake_pnl,2)}</td>
+      <td>${verdict(g.accuracy)}</td></tr>`;
+  }).join('')||'<tr><td colspan="5" class="text-gray-600">No regime data yet.</td></tr>';
+}
+
+async function renderCalibration(){
+  const c=await api('/api/calibration');
+  if(!c||c.error) return;
+  const b=c.buckets||[];
+  chart('calibChart').setOption({backgroundColor:'transparent',grid:{left:40,right:14,top:30,bottom:26},
+    legend:{textStyle:{color:'#8b95a5'},top:0},
+    xAxis:{type:'category',data:b.map(x=>x.bucket),axisLabel:{color:'#6b7280'}},
+    yAxis:{type:'value',min:0,max:100,axisLabel:{color:'#6b7280'}},tooltip:{trigger:'axis'},
+    series:[{name:'stated confidence',type:'bar',data:b.map(x=>x.stated_confidence),itemStyle:{color:'#6366f1'}},
+      {name:'actual accuracy',type:'bar',data:b.map(x=>x.accuracy),itemStyle:{color:'#10b981'}}]});
+  document.getElementById('calibRows').innerHTML=b.map(x=>{
+    const fc=x.flag==='OVERCONFIDENT'?'text-red-400':x.flag==='underconfident'?'text-yellow-400':'text-emerald-400';
+    return `<tr><td>${x.bucket}</td><td class="mono">${x.samples}</td>
+      <td class="mono">${x.stated_confidence==null?'—':pct(x.stated_confidence)}</td>
+      <td class="mono">${x.accuracy==null?'—':pct(x.accuracy)}</td>
+      <td class="mono">${x.gap==null?'—':fmt(x.gap,1)}</td>
+      <td class="${fc}">${x.flag}</td></tr>`;
+  }).join('');
+  const w=(c.overconfidence_warnings||[]).concat(c.underconfidence_warnings||[]);
+  document.getElementById('calibWarnings').innerHTML=
+    `<div class="font-semibold mb-1">${c.notice||''}</div>`+
+    (w.length?w.map(x=>'• '+x).join('<br>'):'No calibration warnings yet.');
+}
 
 async function renderAccuracy(){
-  const a = await api('/api/accuracy');
-  if(!a || a.error) return;
-  document.getElementById('accOverall').textContent = pct(a.overall_accuracy);
-  document.getElementById('accTotal').textContent = a.total_evaluated||0;
-  const v = document.getElementById('accVerdict');
-  v.textContent = a.should_stop ? 'STOP — UNRELIABLE' : (a.reliable?'RELIABLE':'BUILDING');
-  v.style.color = a.should_stop?'#ef4444':(a.reliable?'#10b981':'#eab308');
-  const grp = obj => Object.entries(obj||{}).map(([k,g])=>
-    `<div class="flex justify-between py-1 border-b border-gray-800"><span>${k}</span>
-     <span>${pct(g.accuracy)} <span class="text-gray-500">(${g.samples})</span></span></div>`).join('')||'—';
-  document.getElementById('accBySymbol').innerHTML = grp(a.by_symbol);
-  document.getElementById('accByRegime').innerHTML = grp(a.by_condition);
-  document.getElementById('accCalibration').innerHTML = Object.entries(a.confidence_calibration||{}).map(([k,g])=>
-    `<div class="flex justify-between py-1 border-b border-gray-800"><span>${k}</span>
-     <span>stated ${pct(g.stated_confidence)} → actual ${pct(g.accuracy)} <span class="text-gray-500">(${g.samples})</span></span></div>`).join('')||'—';
-  document.getElementById('accWarnings').innerHTML =
-    (a.false_confidence_warnings||[]).map(w=>`<div class="text-yellow-300 py-1">⚠ ${w}</div>`).join('')
-    || '<span class="text-gray-500">No false-confidence warnings.</span>';
+  const a=await api('/api/accuracy');
+  if(!a||a.error) return;
+  document.getElementById('accOverall').textContent=pct(a.overall_accuracy);
+  document.getElementById('accTotal').textContent=a.total_evaluated||0;
+  const v=document.getElementById('accVerdict');
+  v.textContent=a.should_stop?'STOP — UNRELIABLE':(a.reliable?'RELIABLE':'BUILDING');
+  v.style.color=a.should_stop?'#ef4444':(a.reliable?'#10b981':'#eab308');
+  const grp=o=>Object.entries(o||{}).map(([k,g])=>
+    `<div class="flex justify-between py-0.5 border-b border-gray-800"><span>${k}</span>
+     <span class="mono">${pct(g.accuracy)} <span class="text-gray-600">(${g.samples})</span></span></div>`).join('')||'—';
+  document.getElementById('accBySymbol').innerHTML=grp(a.by_symbol);
+  document.getElementById('accByRegime').innerHTML=grp(a.by_condition);
+  document.getElementById('accWarnings').innerHTML=
+    (a.false_confidence_warnings||[]).map(w=>`<div class="text-yellow-300 py-0.5">⚠ ${w}</div>`).join('')
+    ||'<span class="text-gray-600">No false-confidence warnings.</span>';
 }
 
 async function renderPaper(){
-  const p = await api('/api/paper');
-  if(!p || p.error) return;
-  document.getElementById('pEquity').textContent = fmt(p.equity,0);
-  const pnl = document.getElementById('pPnl');
-  pnl.textContent = (p.total_pnl>=0?'+':'')+fmt(p.total_pnl,0);
-  pnl.style.color = p.total_pnl>=0?'#10b981':'#ef4444';
-  document.getElementById('pWin').textContent = pct(p.win_rate);
-  document.getElementById('pDd').textContent = pct(p.max_drawdown_pct);
-  document.getElementById('pFees').textContent = fmt(p.total_fees,1)+' / '+fmt(p.total_slippage,1);
-  document.getElementById('pOpen').innerHTML = (p.open_positions||[]).map(t=>
-    `<div class="flex justify-between py-1 border-b border-gray-800">
-     <span class="font-semibold">${t.symbol}</span>
-     <span>qty ${fmt(t.quantity,4)} · entry ${fmt(t.entry_price,4)} · stop ${fmt(t.stop,4)} · target ${fmt(t.target,4)}</span></div>`
-    ).join('') || '<span class="text-gray-500">No open simulated positions.</span>';
-  document.getElementById('pClosed').innerHTML = (p.closed_trades||[]).map(t=>{
-    const c = (t.pnl||0)>=0?'#10b981':'#ef4444';
+  const p=await api('/api/paper-trades');
+  if(!p||p.error) return;
+  document.getElementById('pEquity').textContent=fmt(p.equity,0);
+  const pn=document.getElementById('pPnl');
+  pn.textContent=(p.total_pnl>=0?'+':'')+fmt(p.total_pnl,0);
+  pn.style.color=p.total_pnl>=0?'#10b981':'#ef4444';
+  document.getElementById('pWin').textContent=pct(p.win_rate);
+  document.getElementById('pDd').textContent=pct(p.max_drawdown_pct);
+  document.getElementById('pFees').textContent=fmt(p.total_fees,1)+' / '+fmt(p.total_slippage,1);
+  document.getElementById('pOpen').innerHTML=(p.open_positions||[]).map(t=>
+    `<div class="flex justify-between py-1 border-b border-gray-800"><span class="font-semibold">${t.symbol}</span>
+     <span class="mono">qty ${fmt(t.quantity,4)} · entry ${fmt(t.entry_price,4)}</span></div>`).join('')
+    ||'<span class="text-gray-600">No open simulated positions.</span>';
+  document.getElementById('pClosed').innerHTML=(p.closed_trades||[]).map(t=>{
+    const c=(t.pnl||0)>=0?'#10b981':'#ef4444';
     return `<tr><td class="font-semibold">${t.symbol}</td><td>${t.side}</td>
-      <td>${fmt(t.entry_price,4)}</td><td>${fmt(t.exit_price,4)}</td>
-      <td style="color:${c}">${(t.pnl>=0?'+':'')+fmt(t.pnl,2)}</td><td>${fmt(t.fees,2)}</td></tr>`;
-  }).join('') || '<tr><td colspan="6" class="text-gray-500">No closed simulated trades yet.</td></tr>';
+      <td class="mono">${fmt(t.entry_price,4)}</td><td class="mono">${fmt(t.exit_price,4)}</td>
+      <td class="mono" style="color:${c}">${(t.pnl>=0?'+':'')+fmt(t.pnl,2)}</td><td class="mono">${fmt(t.fees,2)}</td></tr>`;
+  }).join('')||'<tr><td colspan="6" class="text-gray-600">No closed simulated trades yet.</td></tr>';
 }
 
 async function renderRisk(){
-  const r = await api('/api/risk');
-  if(!r || r.error) return;
-  const list = (arr,empty) => arr&&arr.length ? arr.map(x=>`<div class="py-0.5">• ${x}</div>`).join('')
-    : `<span class="text-gray-500">${empty}</span>`;
-  document.getElementById('riskHazards').innerHTML =
+  const r=await api('/api/risk');
+  if(!r||r.error) return;
+  const list=(arr,empty)=>arr&&arr.length?arr.map(x=>`<div class="py-0.5">• ${x}</div>`).join('')
+    :`<span class="text-gray-600">${empty}</span>`;
+  document.getElementById('riskHazards').innerHTML=
     `<div class="text-red-300">PANIC: ${list(r.panic_symbols,'none')}</div>`+
     `<div class="text-orange-300 mt-1">ILLIQUID: ${list(r.illiquid_symbols,'none')}</div>`+
     `<div class="text-orange-300 mt-1">CHOPPY: ${list(r.choppy_symbols,'none')}</div>`;
-  document.getElementById('riskModel').innerHTML =
+  document.getElementById('riskModel').innerHTML=
     `Model unreliable: <b style="color:${r.model_unreliable?'#ef4444':'#10b981'}">${r.model_unreliable?'YES':'no'}</b><br>`+
     `Should stop trading: <b style="color:${r.should_stop_trading?'#ef4444':'#10b981'}">${r.should_stop_trading?'YES':'no'}</b><br>`+
     `<div class="mt-2 text-yellow-300">${list(r.false_confidence_warnings,'no false-confidence warnings')}</div>`;
-  document.getElementById('riskSkipped').innerHTML = (r.skipped||[]).map(s=>
+  document.getElementById('riskSkipped').innerHTML=(r.skipped||[]).map(s=>
     `<div class="py-0.5">• <b>${s.symbol}</b> — ${s.status}</div>`).join('')
-    || '<span class="text-gray-500">No symbols skipped.</span>';
-  document.getElementById('riskErrors').innerHTML = (r.errors||[]).slice(0,20).map(e=>
-    `<div class="py-0.5 text-sm"><span class="text-gray-500">${(e.ts||'').slice(11,19)}</span>
-     <span class="text-gray-400">[${e.context}]</span> ${e.message}</div>`).join('')
-    || '<span class="text-gray-500">No errors or alerts logged.</span>';
+    ||'<span class="text-gray-600">No symbols skipped.</span>';
+  document.getElementById('riskErrors').innerHTML=(r.errors||[]).slice(0,20).map(e=>
+    `<div class="py-0.5"><span class="text-gray-600">${(e.ts||'').slice(11,19)}</span>
+     <span class="text-gray-500">[${e.context}]</span> ${e.message}</div>`).join('')
+    ||'<span class="text-gray-600">No errors logged.</span>';
 }
 
-// --- tabs ---
-let activeTab = 'overview';
+let activeTab='overview';
 function showTab(name){
-  activeTab = name;
+  activeTab=name;
   document.querySelectorAll('.tab-panel').forEach(p=>p.classList.add('hidden'));
   document.getElementById('tab-'+name).classList.remove('hidden');
-  document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('tab-active', b.dataset.tab===name));
+  document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('tab-active',b.dataset.tab===name));
   refreshTab();
-  if(name==='overview' && safetyChart) safetyChart.resize();
+  Object.values(charts).forEach(c=>c.resize());
 }
 document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>showTab(b.dataset.tab));
-
 function refreshTab(){
-  if(activeTab==='overview') renderSafetyHistory();
-  else if(activeTab==='symbols') renderSymbols();
-  else if(activeTab==='accuracy') renderAccuracy();
-  else if(activeTab==='paper') renderPaper();
-  else if(activeTab==='risk') renderRisk();
+  ({overview:renderOverview,progress:renderProgress,symbols:renderSymbols,
+    regimes:renderRegimes,calibration:renderCalibration,accuracy:renderAccuracy,
+    paper:renderPaper,risk:renderRisk}[activeTab]||(()=>{}))();
 }
 
-// --- live updates: WebSocket with polling fallback ---
-async function poll(){ renderOverview(await api('/api/overview')); refreshTab(); }
+async function poll(){
+  const [o,pr,rd,st]=await Promise.all([api('/api/overview'),api('/api/progress'),
+    api('/api/readiness'),api('/api/status')]);
+  renderTop(o,pr,rd); renderNow(st); refreshTab();
+}
 function connectWS(){
   try{
-    const ws = new WebSocket((location.protocol==='https:'?'wss':'ws')+'://'+location.host+'/ws');
-    ws.onmessage = e => { try{ renderOverview(JSON.parse(e.data)); }catch(_){} };
-    ws.onclose = () => setTimeout(connectWS, 5000);
-  }catch(e){ /* polling covers it */ }
+    const ws=new WebSocket((location.protocol==='https:'?'wss':'ws')+'://'+location.host+'/ws/live');
+    ws.onmessage=e=>{ try{ const d=JSON.parse(e.data);
+      renderTop(d.overview,d.progress,null); renderNow(d.status); }catch(_){} };
+    ws.onclose=()=>setTimeout(connectWS,5000);
+  }catch(e){}
 }
-showTab('overview');
-poll();
-connectWS();
-setInterval(poll, 6000);
+showTab('overview'); poll(); connectWS(); setInterval(poll,6000);
 </script>
 </body>
 </html>

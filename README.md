@@ -60,9 +60,13 @@ trading-bot dashboard                # launch the visual dashboard (FastAPI + we
 trading-bot status                   # show observatory status
 trading-bot report-daily             # generate today's daily report
 trading-bot watchlist-check          # screen configs/watchlist.yaml
+
+# 30-Day Paper Trading Learning Observatory
+trading-bot learn --days 30 --interval 300   # run the 30-day learning observatory
 ```
 
-`make observe`, `make dashboard` and `make test` are also provided.
+`make learn`, `make observe`, `make dashboard`, `make report`, `make status`
+and `make test` are also provided.
 
 By default everything runs **offline** against a deterministic mock exchange.
 Set `DAYTRADE_ALLOW_NETWORK=true` to allow read-only public market-data calls.
@@ -108,6 +112,32 @@ strategy* — never investment advice.
 It is a market **training simulator and safety dashboard**: it monitors many
 pairs, learns which regimes it predicts well, flags when its confidence is
 "fake", and only ever paper-trades.
+
+## 30-Day Paper Trading Learning Observatory
+
+`trading-bot learn --days 30` runs the observatory as a **multi-day learning
+session**. It is restart-safe — the 30-day clock is persisted to
+`data/learning_state.json` and resumes where it left off.
+
+The dashboard then shows, at a glance:
+
+- **Progress** — day N/30, learning progress %, cycles completed vs expected,
+  uptime, and the current learning phase (Warm-up → Data collection → Pattern
+  discovery → Reliability testing → Stress testing → Final evaluation).
+- **Day timeline** — one cell per day, green/yellow/red by how well it ran.
+- **Paper Strategy Readiness** — a 0-100 score (NOT ENOUGH DATA → UNRELIABLE →
+  PROMISING BUT UNPROVEN → STABLE IN PAPER CONDITIONS → STRONG PAPER
+  PERFORMANCE, STILL NOT GUARANTEED). **Capped at 60 before day 30** so the
+  dashboard cannot turn falsely optimistic early.
+- **Regime dashboard** — accuracy and fake PnL per market regime, so you can
+  see which regimes the strategy works in and which destroy it.
+- **Confidence calibration** — does an 80%-confidence prediction actually win
+  ~80% of the time? Overconfidence is flagged.
+- **Live activity feed** + a **"what is it doing right now"** panel (current
+  cycle, current step, current symbol, next cycle).
+
+The readiness score and reports never say "safe to invest" — only whether
+*paper conditions look stable* or the *strategy is currently unreliable*.
 
 ## Project layout
 

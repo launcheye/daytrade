@@ -31,7 +31,7 @@ def test_dashboard_serves_index(tmp_path):
     client = TestClient(create_app(tmp_path / "empty.db"))
     resp = client.get("/")
     assert resp.status_code == 200
-    assert "Market Safety Observatory" in resp.text
+    assert "Learning Observatory" in resp.text
 
 
 def test_dashboard_health_is_paper_only(tmp_path):
@@ -79,3 +79,67 @@ def test_dashboard_empty_db_does_not_crash(tmp_path):
     overview = client.get("/api/overview").json()
     assert overview["symbols_observed"] == 0
     assert client.get("/api/symbols").json() == []
+
+
+# --- learning observatory endpoints ----------------------------------------
+
+def _learning_db(tmp_path):
+    from daytrade.observatory import LearningSession
+    db_path = tmp_path / "learn.db"
+    db = ObservatoryDB(db_path)
+    session = LearningSession.resume_or_create(db, target_days=30,
+                                               interval_seconds=300)
+    session.start = _T0
+    obs = Observer(load_config(load_dotenv_file=False),
+                   WatchlistConfig(symbols=["BTCUSDT", "ETHUSDT"]),
+                   db=db, feed=LiveMockFeed(), learning_session=session)
+    obs.start()
+    for k in range(3):
+        obs.run_once(_T0 + timedelta(hours=8 * k))
+    obs.run_once(_T0 + timedelta(days=1, hours=2))
+    obs.stop()
+    obs.db.close()
+    return db_path
+
+
+def test_dashboard_learning_endpoints(tmp_path):
+    client = TestClient(create_app(_learning_db(tmp_path)))
+    for endpoint in ("/api/progress", "/api/regimes", "/api/calibration",
+                     "/api/readiness", "/api/learning", "/api/activity",
+                     "/api/status", "/api/daily-reports", "/api/predictions",
+                     "/api/paper-trades"):
+        resp = client.get(endpoint)
+        assert resp.status_code == 200, endpoint
+        assert resp.json() is not None
+
+
+def test_dashboard_progress_format(tmp_path):
+    client = TestClient(create_app(_learning_db(tmp_path)))
+    body = client.get("/api/progress").json()
+    assert body["target_days"] == 30
+    assert body["current_day"] >= 1
+    assert "current_phase" in body
+    assert isinstance(body["day_timeline"], list)
+
+
+def test_dashboard_readiness_capped_and_safe_language(tmp_path):
+    client = TestClient(create_app(_learning_db(tmp_path)))
+    body = client.get("/api/readiness").json()
+    # Early in the window readiness must be capped at 60.
+    assert body["score"] <= 60.0
+    assert "invest" not in body["level"].lower()
+
+
+def test_dashboard_status_now_panel(tmp_path):
+    client = TestClient(create_app(_learning_db(tmp_path)))
+    body = client.get("/api/status").json()
+    assert "current_step" in body
+    assert "cycle" in body
+
+
+def test_dashboard_health_denies_wallets_and_transfers(tmp_path):
+    client = TestClient(create_app(tmp_path / "obs.db"))
+    body = client.get("/api/health").json()
+    assert body["real_trading"] is False
+    assert body["wallets"] is False
+    assert body["bank_transfers"] is False

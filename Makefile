@@ -3,11 +3,12 @@
 
 PY ?= python3
 
-.PHONY: help install observe dashboard report status watchlist test demo backtest clean
+.PHONY: help install learn observe dashboard report status watchlist test demo backtest clean
 
 help:
 	@echo "daytrade — make targets"
 	@echo "  make install     install the package (editable, with dev extras)"
+	@echo "  make learn       run the 30-day Paper Trading Learning Observatory"
 	@echo "  make observe     run the 24/7 Market Safety Observer (Ctrl+C to stop)"
 	@echo "  make dashboard   launch the visual dashboard at http://127.0.0.1:8000"
 	@echo "  make report      generate today's daily observatory report"
@@ -19,6 +20,9 @@ help:
 
 install:
 	$(PY) -m pip install -e ".[dev]"
+
+learn:
+	$(PY) -m daytrade learn --days 30 --interval 300
 
 observe:
 	$(PY) -m daytrade observe --interval 300

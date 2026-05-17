@@ -41,3 +41,8 @@ reports/daily/
 *.db
 *.db-wal
 *.db-shm
+
+# Observatory runtime state
+data/learning_state.json
+data/now.json
+data/cache/

@@ -231,4 +231,7 @@ class FusionEngine:
             entry = reference_price + offset
             stop = entry + stop_dist
             target = entry - target_dist
-        return round(entry, 2), round(stop, 2), round(target, 2)
+        # Round to a precision appropriate for the asset's price magnitude —
+        # a fixed 2 dp would collapse the levels of a low-priced alt-coin.
+        dp = 2 if reference_price >= 100 else (4 if reference_price >= 1 else 8)
+        return round(entry, dp), round(stop, dp), round(target, dp)

@@ -71,7 +71,41 @@ CREATE TABLE IF NOT EXISTS errors (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     ts TEXT NOT NULL, context TEXT, message TEXT
 );
+CREATE TABLE IF NOT EXISTS learning_sessions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    start_ts TEXT NOT NULL, target_days INTEGER, interval_seconds INTEGER,
+    status TEXT DEFAULT 'active', cycles_completed INTEGER DEFAULT 0,
+    last_update_ts TEXT
+);
+CREATE TABLE IF NOT EXISTS daily_metrics (
+    day_date TEXT PRIMARY KEY, day_number INTEGER, cycles INTEGER,
+    expected_cycles INTEGER, uptime_pct REAL, predictions_made INTEGER,
+    predictions_evaluated INTEGER, accuracy REAL, fake_pnl REAL,
+    drawdown_pct REAL, paper_trades INTEGER, skipped INTEGER,
+    dominant_regime TEXT, dominant_condition TEXT, errors INTEGER,
+    status TEXT, readiness REAL
+);
+CREATE TABLE IF NOT EXISTS regime_periods (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts TEXT NOT NULL, day_number INTEGER, condition TEXT, regime TEXT,
+    safety_score REAL
+);
+CREATE TABLE IF NOT EXISTS readiness_scores (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts TEXT NOT NULL, score REAL, level TEXT, capped INTEGER,
+    day_number INTEGER, breakdown TEXT, blockers TEXT
+);
+CREATE TABLE IF NOT EXISTS alerts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts TEXT NOT NULL, level TEXT, kind TEXT, message TEXT
+);
+CREATE TABLE IF NOT EXISTS activity_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts TEXT NOT NULL, level TEXT, event TEXT, detail TEXT, cycle INTEGER
+);
 CREATE INDEX IF NOT EXISTS ix_snap_symbol_ts ON market_snapshots(symbol, ts);
+CREATE INDEX IF NOT EXISTS ix_activity_id ON activity_events(id);
+CREATE INDEX IF NOT EXISTS ix_regime_ts ON regime_periods(ts);
 CREATE INDEX IF NOT EXISTS ix_pred_symbol_ts ON predictions(symbol, ts);
 CREATE INDEX IF NOT EXISTS ix_pred_evaluated ON predictions(evaluated);
 CREATE INDEX IF NOT EXISTS ix_trades_status ON paper_trades(status);
@@ -198,6 +232,87 @@ class ObservatoryDB:
             "UPDATE bot_runs SET status=?, stopped_ts=? WHERE id=?",
             (status, _now(), run_id))
         self._conn.commit()
+
+    # -- learning sessions ---------------------------------------------------
+
+    def start_learning_session(self, target_days: int,
+                               interval_seconds: int) -> int:
+        now = _now()
+        return self._insert("learning_sessions", {
+            "start_ts": now, "target_days": target_days,
+            "interval_seconds": interval_seconds, "status": "active",
+            "cycles_completed": 0, "last_update_ts": now})
+
+    def update_learning_session(self, session_id: int, cycles: int,
+                                status: str = "active") -> None:
+        self._conn.execute(
+            "UPDATE learning_sessions SET cycles_completed=?, status=?, "
+            "last_update_ts=? WHERE id=?", (cycles, status, _now(), session_id))
+        self._conn.commit()
+
+    def current_learning_session(self) -> Optional[Dict[str, Any]]:
+        return self._one("SELECT * FROM learning_sessions "
+                         "ORDER BY id DESC LIMIT 1")
+
+    # -- daily metrics / regimes / readiness ---------------------------------
+
+    def upsert_daily_metric(self, day_date: str, **f: Any) -> None:
+        cols = {"day_date": day_date, **f}
+        names = ", ".join(cols)
+        placeholders = ", ".join("?" for _ in cols)
+        updates = ", ".join(f"{k}=excluded.{k}" for k in cols
+                            if k != "day_date")
+        self._conn.execute(
+            f"INSERT INTO daily_metrics ({names}) VALUES ({placeholders}) "
+            f"ON CONFLICT(day_date) DO UPDATE SET {updates}",
+            list(cols.values()))
+        self._conn.commit()
+
+    def daily_metrics(self) -> List[Dict[str, Any]]:
+        return self._all("SELECT * FROM daily_metrics ORDER BY day_date")
+
+    def insert_regime_period(self, **f: Any) -> int:
+        return self._insert("regime_periods", {"ts": f.get("ts", _now()), **f})
+
+    def regime_periods(self, limit: int = 2000) -> List[Dict[str, Any]]:
+        return list(reversed(self._all(
+            "SELECT * FROM regime_periods ORDER BY id DESC LIMIT ?", (limit,))))
+
+    def insert_readiness(self, **f: Any) -> int:
+        row = {"ts": f.get("ts", _now()), **f}
+        if isinstance(row.get("breakdown"), (list, dict)):
+            row["breakdown"] = json.dumps(row["breakdown"])
+        if isinstance(row.get("blockers"), (list, dict)):
+            row["blockers"] = json.dumps(row["blockers"])
+        return self._insert("readiness_scores", row)
+
+    def latest_readiness(self) -> Optional[Dict[str, Any]]:
+        return self._one("SELECT * FROM readiness_scores "
+                         "ORDER BY id DESC LIMIT 1")
+
+    def readiness_history(self, limit: int = 200) -> List[Dict[str, Any]]:
+        return list(reversed(self._all(
+            "SELECT * FROM readiness_scores ORDER BY id DESC LIMIT ?", (limit,))))
+
+    # -- alerts / activity feed ----------------------------------------------
+
+    def insert_alert(self, level: str, kind: str, message: str) -> int:
+        return self._insert("alerts", {"ts": _now(), "level": level,
+                                       "kind": kind, "message": message})
+
+    def recent_alerts(self, limit: int = 50) -> List[Dict[str, Any]]:
+        return self._all("SELECT * FROM alerts ORDER BY id DESC LIMIT ?",
+                         (limit,))
+
+    def insert_activity(self, event: str, detail: str = "",
+                        level: str = "info", cycle: int = 0) -> int:
+        return self._insert("activity_events", {
+            "ts": _now(), "level": level, "event": event,
+            "detail": detail, "cycle": cycle})
+
+    def recent_activity(self, limit: int = 60) -> List[Dict[str, Any]]:
+        return self._all("SELECT * FROM activity_events "
+                         "ORDER BY id DESC LIMIT ?", (limit,))
 
     # -- queries -------------------------------------------------------------
 
