@@ -69,6 +69,7 @@ from ..observatory import (
 )
 from ..observatory.database import DEFAULT_DB_PATH
 from ..observatory.prediction_tracker import build_prediction_memory
+from ..research import INTERVAL_MS, render_research, run_research
 from ..runtime import apply_runtime, get_logger
 from ..safety.guard import forbid_real_trading
 from ..validation import walk_forward_validate
@@ -659,6 +660,35 @@ def watchlist_check(
             _console.print(f"[red]{symbol}:[/red] " + "; ".join(r.rejections))
     _console.print(table)
     _console.print(f"{approved}/{len(wl.symbols)} symbols cleared the filters.")
+
+
+@app.command()
+def research(
+    symbol: str = typer.Option("BTCUSDT", help="Symbol to research."),
+    symbols: Optional[str] = typer.Option(
+        None, help="Comma-separated symbols (overrides --symbol)."),
+    interval: str = typer.Option(
+        "1h", help=f"Candle interval: {', '.join(sorted(INTERVAL_MS))}."),
+    days: int = typer.Option(365, help="Days of real history to evaluate."),
+    profile: Optional[str] = typer.Option(None, help="Config profile."),
+) -> None:
+    """Historical research lab — backtest + walk-forward over real history.
+
+    Downloads real Binance history (read-only public data, no API key) and
+    runs the same backtest + walk-forward engines the live observatory uses
+    — collapsing a 30-day experiment into minutes. Research only; no orders.
+    """
+    os.environ["DAYTRADE_ALLOW_NETWORK"] = "true"
+    cfg = _setup(profile)
+    _console.rule("[bold]daytrade — historical research lab")
+    syms = ([s.strip() for s in symbols.split(",") if s.strip()]
+            if symbols else [symbol])
+    _console.print(
+        f"Evaluating {len(syms)} symbol(s) over {days}d of real {interval} "
+        "Binance history. First run downloads + caches; later runs are "
+        "instant. Backtests are NOT reality.\n")
+    results = run_research(syms, interval=interval, days=days, config=cfg)
+    render_research(results, _console)
 
 
 if __name__ == "__main__":  # pragma: no cover

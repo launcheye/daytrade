@@ -63,10 +63,22 @@ trading-bot watchlist-check          # screen configs/watchlist.yaml
 
 # 30-Day Paper Trading Learning Observatory
 trading-bot learn --days 30 --interval 300   # run the 30-day learning observatory
+
+# Historical research lab
+trading-bot research --symbol BTCUSDT --interval 1h --days 365   # backtest over real history
 ```
 
-`make learn`, `make observe`, `make dashboard`, `make report`, `make status`
-and `make test` are also provided.
+`make learn`, `make research`, `make observe`, `make dashboard`, `make report`,
+`make status` and `make test` are also provided.
+
+## Historical research lab
+
+`trading-bot research` downloads **real Binance history** (read-only public
+data, cached locally) and runs the same backtest + walk-forward engines the
+live observatory uses — collapsing a 30-day experiment into minutes. It is
+deliberately ruthless: its job is to tell you a strategy has *no edge*,
+quickly and on real data, so the rare one that does is worth a live 30-day
+confirmation. Research only — no orders.
 
 By default everything runs **offline** against a deterministic mock exchange.
 Set `DAYTRADE_ALLOW_NETWORK=true` to allow read-only public market-data calls.
