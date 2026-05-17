@@ -175,8 +175,8 @@ class MicrostructureEngine:
         if not (math.isfinite(s) and math.isfinite(v)):
             return MarketRegime.RANGE, False
 
-        high_vol = v > 0.012
-        weak_trend = abs(s) < 0.0006
+        high_vol = v > self.config.chop_high_volatility
+        weak_trend = abs(s) < self.config.chop_max_trend_slope
         if high_vol and weak_trend:
             return MarketRegime.VOLATILE, True
         if weak_trend:

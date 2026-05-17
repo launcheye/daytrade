@@ -2,10 +2,21 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
+
+from daytrade.config.schema import MicrostructureConfig
 from daytrade.exchanges.mock import build_orderbook
 from daytrade.microstructure import MicrostructureEngine, depth_imbalance, find_walls
 from daytrade.models import Bias
-from daytrade.models.market import OrderBookLevel
+from daytrade.models.market import OHLCV, OrderBookLevel
+
+
+def _flat_candles(n=60, price=30_000.0):
+    """A perfectly flat (zero-slope) candle series."""
+    t0 = datetime(2026, 5, 17, tzinfo=timezone.utc)
+    return [OHLCV(symbol="BTCUSDT", timestamp=t0 + timedelta(minutes=i),
+                  open=price, high=price, low=price, close=price)
+            for i in range(n)]
 
 
 def test_depth_imbalance_balanced_book():
@@ -56,3 +67,20 @@ def test_microstructure_score_in_bounds(flat_candles):
     sig = MicrostructureEngine().compute(book, flat_candles)
     assert -1.0 <= sig.score <= 1.0
     assert 0.0 <= sig.confidence <= 1.0
+
+
+def test_microstructure_flags_chop_on_flat_market():
+    """A directionless (zero-slope) market is a chop zone."""
+    book = build_orderbook("BTCUSDT", 30000.0, jitter=0.0)
+    assert MicrostructureEngine().compute(book, _flat_candles()).chop_zone is True
+
+
+def test_microstructure_chop_threshold_is_configurable(uptrend_candles):
+    """chop_max_trend_slope controls when a trending market counts as chop."""
+    book = build_orderbook("BTCUSDT", 30000.0, jitter=0.0)
+    # A permissive threshold: a real uptrend is NOT a chop zone.
+    loose = MicrostructureConfig(chop_max_trend_slope=1e-6)
+    assert MicrostructureEngine(loose).compute(book, uptrend_candles).chop_zone is False
+    # An extreme threshold flags even a genuine trend as chop.
+    strict = MicrostructureConfig(chop_max_trend_slope=1.0)
+    assert MicrostructureEngine(strict).compute(book, uptrend_candles).chop_zone is True

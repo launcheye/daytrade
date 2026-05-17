@@ -104,6 +104,21 @@ class MicrostructureConfig(_Section):
         default=3.0, gt=1,
         description="A level this many times the average size is a 'wall'.",
     )
+    # Chop-zone detection. A market is a "chop zone" (kill switch -> HOLD) when
+    # its trailing trend slope is below chop_max_trend_slope. The slope is a
+    # fractional price move per bar; calibrated to real 1-minute Binance data,
+    # where genuine 1m slopes sit around 0.0001-0.0004. The old 0.0006 default
+    # was above the largest real slope, so every symbol was always "chop" and
+    # the bot never traded.
+    chop_max_trend_slope: float = Field(
+        default=0.00015, gt=0,
+        description="Abs trailing slope (fractional move per bar) below which "
+                    "the market is a directionless chop zone.",
+    )
+    chop_high_volatility: float = Field(
+        default=0.012, gt=0,
+        description="Per-bar return std above which volatility is 'high'.",
+    )
 
 
 class FeatureConfig(_Section):
