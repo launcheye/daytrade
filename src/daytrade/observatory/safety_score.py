@@ -192,22 +192,41 @@ def aggregate_safety(assessments: List[SafetyAssessment]) -> SafetyAssessment:
         return SafetyAssessment(50.0, "WAIT", "MIXED",
                                 "MIXED — no data yet", ["no symbols observed"], {})
     scores = [a.score for a in assessments]
-    mean = sum(scores) / len(scores)
+    total = len(assessments)
+    mean = sum(scores) / total
     worst = min(scores)
     score = round(_clamp(0.6 * mean + 0.4 * worst), 1)
 
-    # Global condition: the most severe condition present wins.
+    # Global condition: the most severe condition present wins — but a
+    # *severe* label (PANIC/ILLIQUID/OVEREXTENDED) only becomes the market-
+    # wide headline when it affects a meaningful share of symbols. A couple
+    # of thin names out of 35 do not make the whole market "illiquid".
     severity = ["PANIC", "ILLIQUID", "OVEREXTENDED", "CHOPPY", "MIXED",
                 "CALM", "OPPORTUNISTIC"]
-    present = {a.condition for a in assessments}
-    condition = next((c for c in severity if c in present), "MIXED")
+    severe = {"PANIC", "ILLIQUID", "OVEREXTENDED"}
+    _severe_share_threshold = 0.30
+
+    def _count(cond: str) -> int:
+        return sum(1 for a in assessments if a.condition == cond)
+
+    condition = "MIXED"
+    for c in severity:
+        n = _count(c)
+        if n == 0:
+            continue
+        if c in severe and n / total < _severe_share_threshold:
+            continue  # an outlier-few — not a market-wide condition
+        condition = c
+        break
 
     status = status_for_score(score)
-    panic = [a for a in assessments if a.condition == "PANIC"]
-    reasons = [f"{len(assessments)} symbols observed; "
-               f"mean {mean:.0f}, weakest {worst:.0f}"]
-    if panic:
-        reasons.append(f"{len(panic)} symbol(s) in PANIC")
+    reasons = [f"{total} symbols observed; mean {mean:.0f}, weakest {worst:.0f}"]
+    for c in severe:
+        n = _count(c)
+        if n and c != condition:
+            reasons.append(f"{n} symbol(s) flagged {c} (outliers)")
+        elif n and c == condition:
+            reasons.append(f"{n}/{total} symbols in {c}")
     return SafetyAssessment(
         score=score, status=status, condition=condition,
         headline=f"{condition} — {band_label(score)}",

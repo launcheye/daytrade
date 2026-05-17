@@ -327,6 +327,7 @@ class DashboardData:
             "steps": now.get("steps", []),
             "phase": state.get("current_phase", "—"),
             "learning_status": state.get("status", "—"),
+            "data_source": now.get("data_source", "simulated"),
         }
 
     def regimes(self) -> Dict[str, Any]:

@@ -15,6 +15,7 @@ No command can place a real trade.
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Optional
 
@@ -62,6 +63,7 @@ from ..observatory import (
     LiveMockFeed,
     Observer,
     ObservatoryDB,
+    build_feed,
     load_learning_state,
     write_daily_report,
 )
@@ -485,6 +487,9 @@ def learn(
     profile: Optional[str] = typer.Option(None, help="Config profile."),
     days: int = typer.Option(30, help="Length of the learning window, in days."),
     interval: int = typer.Option(300, help="Seconds between observation cycles."),
+    real_data: bool = typer.Option(
+        True, "--real-data/--mock-data",
+        help="Use live Binance public market data (read-only) vs the simulator."),
 ) -> None:
     """Run the multi-day Paper Trading Learning Observatory (Ctrl+C to stop).
 
@@ -492,16 +497,21 @@ def learn(
     progress, prediction reliability and a Paper Strategy Readiness score.
     Resumes the same window on restart. Paper / simulation only.
     """
+    if real_data:
+        os.environ["DAYTRADE_ALLOW_NETWORK"] = "true"
     cfg = _setup(profile)
     _console.rule(f"[bold]daytrade — {days}-Day Paper Trading Learning Observatory")
     _console.print("Paper / simulation only. No real trading, wallets, or "
                     "money movement. Ctrl+C to pause; the window resumes on "
-                    "restart.\n")
+                    "restart.")
+    _console.print(("Market data: [bold]LIVE Binance public data[/bold] "
+                    "(read-only, no API key)" if real_data else
+                    "Market data: deterministic offline simulator") + "\n")
     db = ObservatoryDB()
     session = LearningSession.resume_or_create(db, target_days=days,
                                                interval_seconds=interval)
     observer = Observer(cfg, load_watchlist_config(), db=db,
-                        feed=LiveMockFeed(), model=_load_observer_model(),
+                        feed=build_feed(cfg), model=_load_observer_model(),
                         learning_session=session)
     from datetime import datetime, timezone
     now = datetime.now(timezone.utc)
@@ -519,6 +529,9 @@ def learn(
 def observe(
     profile: Optional[str] = typer.Option(None, help="Config profile."),
     interval: int = typer.Option(300, help="Seconds between observation cycles."),
+    real_data: bool = typer.Option(
+        True, "--real-data/--mock-data",
+        help="Use live Binance public market data (read-only) vs the simulator."),
 ) -> None:
     """Run the 24/7 Market Safety Observer (Ctrl+C to stop).
 
@@ -526,6 +539,8 @@ def observe(
     predictions, evaluates older predictions against reality, and scores
     market safety. Observation / paper simulation only — no real orders.
     """
+    if real_data:
+        os.environ["DAYTRADE_ALLOW_NETWORK"] = "true"
     cfg = _setup(profile)
     _console.rule("[bold]daytrade — Market Safety Observer")
     _console.print("Paper / simulation only. No real orders, wallets, or "
@@ -541,7 +556,7 @@ def observe(
             _console.print(f"[yellow]ML model not loaded:[/yellow] {exc}")
 
     observer = Observer(cfg, load_watchlist_config(),
-                        db=ObservatoryDB(), feed=LiveMockFeed(), model=model)
+                        db=ObservatoryDB(), feed=build_feed(cfg), model=model)
     _console.print(f"Observing {len(observer.watchlist_config.symbols)} symbols "
                     f"every {interval}s. Database: {DEFAULT_DB_PATH}")
     observer.run_forever(interval)
@@ -612,13 +627,15 @@ def status() -> None:
 
 
 @app.command("watchlist-check")
-def watchlist_check() -> None:
+def watchlist_check(
+    profile: Optional[str] = typer.Option(None, help="Config profile."),
+) -> None:
     """Screen the configs/watchlist.yaml symbols for liquidity / quality."""
     from datetime import datetime, timezone
-    _setup(None)
+    cfg = _setup(profile)
     _console.rule("[bold]daytrade — watchlist check")
     wl = load_watchlist_config()
-    feed = LiveMockFeed()
+    feed = build_feed(cfg)
     now = datetime.now(timezone.utc)
     screener = WatchlistScreener(wl)
 

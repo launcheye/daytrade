@@ -24,6 +24,7 @@ from .metrics import (
     roll_up_day,
 )
 from .observer import CycleSummary, Observer
+from .real_feed import RealMarketFeed, build_feed
 from .prediction_tracker import (
     HORIZONS,
     PredictionMemory,
@@ -51,6 +52,8 @@ __all__ = [
     "profile_for",
     "Observer",
     "CycleSummary",
+    "RealMarketFeed",
+    "build_feed",
     "SafetyInputs",
     "SafetyAssessment",
     "compute_safety_score",

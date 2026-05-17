@@ -438,6 +438,7 @@ class Observer:
                 "current_symbol": symbol,
                 "next_cycle_at": next_cycle,
                 "errors_this_cycle": getattr(self, "_errors_this_cycle", 0),
+                "data_source": getattr(self.feed, "source", "simulated"),
                 "steps": CYCLE_STEPS,
             }), encoding="utf-8")
         except OSError:  # pragma: no cover

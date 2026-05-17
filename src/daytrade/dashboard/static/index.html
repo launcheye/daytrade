@@ -364,7 +364,12 @@ async function renderOverview(){
 function renderNow(s){
   if(!s||s.error) return;
   const steps=s.steps||[],cur=s.current_step;
+  const real=s.data_source==='real';
+  const srcBadge='<span class="pill" style="background:'+(real?'#00A65126':'var(--hover)')+
+    ';color:'+(real?'var(--green)':'var(--dim)')+'">'+
+    (real?'● REAL Binance data':'○ simulated data')+'</span>';
   document.getElementById('nowPanel').innerHTML=
+    '<div class="mb-2">'+srcBadge+'</div>'+
     '<div class="mb-2">Cycle <b class="mono">#'+(s.cycle||0)+'</b> · phase <b>'+(s.phase||'—')+'</b> · '+
     '<span style="color:'+(s.bot_running?'var(--up)':'var(--down)')+'">'+(s.bot_running?'live':'offline')+'</span></div>'+
     '<div style="color:var(--dim)" class="mb-1.5">Symbol: <b style="color:var(--txt)">'+(s.current_symbol||'—')+
