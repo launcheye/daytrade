@@ -225,17 +225,49 @@ class DashboardData:
     def paper(self) -> Dict[str, Any]:
         closed = self.db.closed_paper_trades(limit=5000)
         open_trades = self.db.open_paper_trades()
+        prices = {s["symbol"]: s.get("price")
+                  for s in self.db.latest_snapshots()}
         dd = _drawdown(closed)
         wins = [t for t in closed if (t.get("pnl") or 0) > 0]
         best = max(closed, key=lambda t: t.get("pnl") or 0, default=None)
         worst = min(closed, key=lambda t: t.get("pnl") or 0, default=None)
+
+        def _invested(t: Dict[str, Any]) -> float:
+            """Money put into a position = quantity * entry price."""
+            return round((t.get("quantity") or 0.0)
+                         * (t.get("entry_price") or 0.0), 2)
+
+        # Open positions: add the amount invested and a live mark-to-market
+        # unrealized PnL against the latest observed price.
+        open_rows: List[Dict[str, Any]] = []
+        for t in open_trades:
+            row = dict(t)
+            row["invested"] = _invested(t)
+            cur = prices.get(t.get("symbol"))
+            row["current_price"] = cur
+            if cur:
+                sign = 1.0 if t.get("side") == "buy" else -1.0
+                row["unrealized_pnl"] = round(
+                    sign * (t.get("quantity") or 0.0)
+                    * (cur - (t.get("entry_price") or 0.0)), 2)
+            else:
+                row["unrealized_pnl"] = None
+            open_rows.append(row)
+
+        closed_rows: List[Dict[str, Any]] = []
+        for t in closed[:100]:
+            row = dict(t)
+            row["invested"] = _invested(t)
+            closed_rows.append(row)
+
         return {
             "equity": dd["equity"],
             "starting_cash": _STARTING_CASH,
             "total_pnl": round(dd["equity"] - _STARTING_CASH, 2),
             "max_drawdown_pct": dd["max_drawdown_pct"],
-            "open_positions": open_trades,
-            "closed_trades": closed[:100],
+            "invested_now": round(sum(r["invested"] for r in open_rows), 2),
+            "open_positions": open_rows,
+            "closed_trades": closed_rows,
             "closed_count": len(closed),
             "win_rate": round(len(wins) / len(closed) * 100, 1) if closed else 0.0,
             "total_fees": round(sum(t.get("fees") or 0 for t in closed), 2),

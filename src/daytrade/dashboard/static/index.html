@@ -256,16 +256,23 @@
   </section>
 
   <section id="tab-paper" class="tab-panel hidden">
-    <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
+    <div class="grid grid-cols-2 md:grid-cols-6 gap-3 mb-4">
       <div class="card p-3.5"><div class="lbl">Equity</div><div id="pEquity" class="text-xl font-bold mono mt-1"></div></div>
+      <div class="card p-3.5"><div class="lbl">Invested now</div><div id="pInvested" class="text-xl font-bold mono mt-1"></div></div>
       <div class="card p-3.5"><div class="lbl">Sim PnL</div><div id="pPnl" class="text-xl font-bold mono mt-1"></div></div>
       <div class="card p-3.5"><div class="lbl">Win rate</div><div id="pWin" class="text-xl font-bold mono mt-1"></div></div>
       <div class="card p-3.5"><div class="lbl">Max drawdown</div><div id="pDd" class="text-xl font-bold mono mt-1"></div></div>
       <div class="card p-3.5"><div class="lbl">Fees / slippage</div><div id="pFees" class="text-xl font-bold mono mt-1"></div></div>
     </div>
-    <div class="card p-4 mb-4"><div class="lbl mb-2">Open simulated positions</div><div id="pOpen" class="text-[13px]"></div></div>
-    <div class="card p-3 overflow-x-auto"><div class="lbl mb-2">Closed simulated trades</div>
-      <table><thead><tr><th>Symbol</th><th>Side</th><th>Entry</th><th>Exit</th><th>PnL</th><th>Fees</th></tr></thead>
+    <div class="card p-3 overflow-x-auto mb-4">
+      <div class="lbl mb-2">Open positions — money currently in the market (simulated)</div>
+      <table><thead><tr><th>Opened</th><th>Coin</th><th>Side</th><th>Invested</th>
+        <th>Entry price</th><th>Price now</th><th>Unrealized PnL</th></tr></thead>
+      <tbody id="pOpen"></tbody></table></div>
+    <div class="card p-3 overflow-x-auto">
+      <div class="lbl mb-2">Transaction history — closed simulated trades</div>
+      <table><thead><tr><th>Opened</th><th>Closed</th><th>Coin</th><th>Side</th><th>Invested</th>
+        <th>Entry</th><th>Exit</th><th>PnL</th></tr></thead>
       <tbody id="pClosed"></tbody></table></div>
   </section>
 
@@ -339,9 +346,9 @@ function renderTop(o,pr,rd,eq){
       'READINESS '+fmt(rd.score,0)+(rd.capped?' (capped)':'');
   }
   if(eq&&!eq.error){
-    document.getElementById('kEquity').textContent='$'+fmt(eq.current_equity,0);
+    document.getElementById('kEquity').textContent='€'+fmt(eq.current_equity,0);
     const g=document.getElementById('kGain'), up=eq.total_gain>=0;
-    g.textContent=(up?'+$':'-$')+fmt(Math.abs(eq.total_gain),0)+(up?' ▲':' ▼');
+    g.textContent=(up?'+€':'-€')+fmt(Math.abs(eq.total_gain),0)+(up?' ▲':' ▼');
     g.style.color=up?'var(--up)':'var(--down)';
   }
 }
@@ -350,22 +357,22 @@ async function renderEquity(){
   const eq=await api('/api/equity'); if(!eq||eq.error) return;
   const up=eq.total_gain>=0, col=up?'#00A651':'#EE334E';
   const gb=document.getElementById('gainBig');
-  gb.textContent=(up?'+$':'-$')+fmt(Math.abs(eq.total_gain),2); gb.style.color=col;
+  gb.textContent=(up?'+€':'-€')+fmt(Math.abs(eq.total_gain),2); gb.style.color=col;
   const gp=document.getElementById('gainPctBig');
   gp.textContent=(up?'+':'')+fmt(eq.total_gain_pct,2)+'%'; gp.style.color=col;
   document.getElementById('gainSub').textContent=
-    (eq.points||[]).length+' cycles tracked · current paper equity $'+fmt(eq.current_equity,2)+
-    ' (started $'+fmt(eq.starting_cash,0)+')';
-  document.getElementById('gStart').textContent='$'+fmt(eq.starting_cash,0);
-  document.getElementById('gPeak').textContent='$'+fmt(eq.peak_equity,0);
+    (eq.points||[]).length+' cycles tracked · current paper equity €'+fmt(eq.current_equity,2)+
+    ' (started €'+fmt(eq.starting_cash,0)+')';
+  document.getElementById('gStart').textContent='€'+fmt(eq.starting_cash,0);
+  document.getElementById('gPeak').textContent='€'+fmt(eq.peak_equity,0);
   const p=eq.points||[], t=tc();
   chart('equityChart').setOption({ backgroundColor:'transparent',
     grid:{left:62,right:16,top:14,bottom:26},
     xAxis:{type:'category',data:p.map(x=>tMD(x.ts)),
       axisLabel:{color:t.axis,fontSize:10},axisLine:{lineStyle:{color:t.grid}}},
-    yAxis:{type:'value',scale:true,axisLabel:{color:t.axis,formatter:v=>'$'+v},
+    yAxis:{type:'value',scale:true,axisLabel:{color:t.axis,formatter:v=>'€'+v},
       splitLine:{lineStyle:{color:t.grid}}},
-    tooltip:{trigger:'axis',valueFormatter:v=>'$'+fmt(v,2)},
+    tooltip:{trigger:'axis',valueFormatter:v=>'€'+fmt(v,2)},
     series:[{type:'line',smooth:true,symbol:'none',data:p.map(x=>x.equity),
       lineStyle:{color:col,width:2.5},
       markLine:{symbol:'none',data:[{yAxis:eq.starting_cash,
@@ -521,7 +528,7 @@ async function renderSymbols(){
     return '<tr class="clk" onclick="openDetail(\''+r.symbol+'\')">'+
       '<td class="font-semibold">'+r.symbol+'</td><td class="mono">'+fmt(r.price,4)+'</td>'+
       '<td>'+ti+' '+r.trend+'</td><td class="mono">'+pct((r.volatility||0)*100)+'</td>'+
-      '<td class="mono">$'+fmt(r.liquidity,0)+'</td><td class="mono">'+fmt(r.spread_bps,1)+'bps</td>'+
+      '<td class="mono">€'+fmt(r.liquidity,0)+'</td><td class="mono">'+fmt(r.spread_bps,1)+'bps</td>'+
       '<td>'+(r.chop?'<span style="color:var(--yellow)">chop</span>':'<span style="color:var(--faint)">no</span>')+'</td>'+
       '<td>'+(r.prediction||'—').toUpperCase()+'</td>'+
       '<td class="mono">'+(r.confidence==null?'—':fmt(r.confidence*100,0)+'%')+'</td>'+
@@ -561,7 +568,7 @@ async function openDetail(symbol){
   document.getElementById('detailTrades').innerHTML=tr.slice(0,40).map(t2=>{
     const c=(t2.pnl||0)>=0?'var(--up)':'var(--down)';
     return '<div class="py-0.5" style="border-bottom:1px solid var(--line2)">'+fmt(t2.entry_price,4)+'→'+
-      fmt(t2.exit_price,4)+' <span style="color:'+c+'">'+(t2.pnl>=0?'+':'')+fmt(t2.pnl,2)+'</span></div>';
+      fmt(t2.exit_price,4)+' <span style="color:'+c+'">'+(t2.pnl>=0?'+':'')+'€'+fmt(t2.pnl,2)+'</span></div>';
   }).join('')||'<span style="color:var(--dim)">no closed paper trades</span>';
   document.getElementById('symbolDetail').scrollIntoView({behavior:'smooth'});
 }
@@ -625,23 +632,29 @@ async function renderAccuracy(){
 }
 async function renderPaper(){
   const p=await api('/api/paper-trades'); if(!p||p.error) return;
-  document.getElementById('pEquity').textContent='$'+fmt(p.equity,0);
+  document.getElementById('pEquity').textContent='€'+fmt(p.equity,0);
+  document.getElementById('pInvested').textContent='€'+fmt(p.invested_now,0);
   const pn=document.getElementById('pPnl');
-  pn.textContent=(p.total_pnl>=0?'+':'')+fmt(p.total_pnl,0); pn.style.color=p.total_pnl>=0?'var(--up)':'var(--down)';
+  pn.textContent=(p.total_pnl>=0?'+':'')+'€'+fmt(p.total_pnl,0); pn.style.color=p.total_pnl>=0?'var(--up)':'var(--down)';
   document.getElementById('pWin').textContent=pct(p.win_rate);
   document.getElementById('pDd').textContent=pct(p.max_drawdown_pct);
-  document.getElementById('pFees').textContent=fmt(p.total_fees,1)+' / '+fmt(p.total_slippage,1);
-  document.getElementById('pOpen').innerHTML=(p.open_positions||[]).map(t=>
-    '<div class="flex justify-between py-1" style="border-bottom:1px solid var(--line2)"><span class="font-semibold">'+
-    t.symbol+'</span><span class="mono">qty '+fmt(t.quantity,4)+' · entry '+fmt(t.entry_price,4)+'</span></div>').join('')
-    ||'<span style="color:var(--dim)">No open simulated positions.</span>';
+  document.getElementById('pFees').textContent='€'+fmt(p.total_fees,1)+' / €'+fmt(p.total_slippage,1);
+  document.getElementById('pOpen').innerHTML=(p.open_positions||[]).map(t=>{
+    const u=t.unrealized_pnl, c=(u||0)>=0?'var(--up)':'var(--down)';
+    return '<tr><td class="mono">'+tMD(t.ts_open)+'</td><td class="font-semibold">'+t.symbol+'</td>'+
+      '<td>'+(t.side||'').toUpperCase()+'</td><td class="mono">€'+fmt(t.invested,2)+'</td>'+
+      '<td class="mono">'+fmt(t.entry_price,4)+'</td>'+
+      '<td class="mono">'+(t.current_price!=null?fmt(t.current_price,4):'—')+'</td>'+
+      '<td class="mono" style="color:'+c+'">'+(u==null?'—':(u>=0?'+':'')+'€'+fmt(u,2))+'</td></tr>';
+  }).join('')||'<tr><td colspan="7" style="color:var(--dim)">No open positions — no money in the market right now.</td></tr>';
   document.getElementById('pClosed').innerHTML=(p.closed_trades||[]).map(t=>{
     const c=(t.pnl||0)>=0?'var(--up)':'var(--down)';
-    return '<tr><td class="font-semibold">'+t.symbol+'</td><td>'+t.side+'</td>'+
+    return '<tr><td class="mono">'+tMD(t.ts_open)+'</td><td class="mono">'+tMD(t.ts_close)+'</td>'+
+      '<td class="font-semibold">'+t.symbol+'</td><td>'+(t.side||'').toUpperCase()+'</td>'+
+      '<td class="mono">€'+fmt(t.invested,2)+'</td>'+
       '<td class="mono">'+fmt(t.entry_price,4)+'</td><td class="mono">'+fmt(t.exit_price,4)+'</td>'+
-      '<td class="mono" style="color:'+c+'">'+(t.pnl>=0?'+':'')+fmt(t.pnl,2)+'</td>'+
-      '<td class="mono">'+fmt(t.fees,2)+'</td></tr>';
-  }).join('')||'<tr><td colspan="6" style="color:var(--dim)">No closed simulated trades yet.</td></tr>';
+      '<td class="mono" style="color:'+c+'">'+(t.pnl>=0?'+':'')+'€'+fmt(t.pnl,2)+'</td></tr>';
+  }).join('')||'<tr><td colspan="8" style="color:var(--dim)">No closed transactions yet.</td></tr>';
 }
 async function renderRisk(){
   const r=await api('/api/risk'); if(!r||r.error) return;
