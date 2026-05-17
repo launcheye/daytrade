@@ -49,7 +49,12 @@ symbols:
   - GRTUSDT
 
 # --- quality filters (a symbol must pass all of them) ---
-min_24h_volume_usd: 50000000        # reject low-volume markets
+# min_24h_volume_usd is calibrated to REAL current Binance liquidity. The
+# crypto market is quiet right now, so $50M (a simulator-era number) rejected
+# almost every coin. $2M still rejects the genuinely thin pairs (GRT, IMX,
+# MKR, VET ~ <$1M) while letting the real majors through. Raise it again when
+# the market is more active.
+min_24h_volume_usd: 2000000         # reject low-volume markets
 max_spread_bps: 8.0                 # reject wide-spread markets
 min_orderbook_notional_usd: 200000  # reject thin orderbooks / liquidity gaps
 pump_dump_max_1h_move_pct: 0.25     # reject extreme pump/dump candles
