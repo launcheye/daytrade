@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from ..config import load_config
 from ..observatory.database import DEFAULT_DB_PATH, ObservatoryDB
 from ..observatory.metrics import (
     confidence_calibration,
@@ -29,7 +30,17 @@ _DAILY_DIR = _REPO_ROOT / "reports" / "daily"
 
 # A heartbeat older than this means the observer is not considered "live".
 _HEARTBEAT_STALE_SECONDS = 1200.0
-_STARTING_CASH = 10_000.0
+
+
+def _starting_cash() -> float:
+    """The configured paper starting capital (matches what the observer uses)."""
+    try:
+        return load_config(load_dotenv_file=False).paper.starting_cash
+    except Exception:  # noqa: BLE001 - fall back to the schema default
+        return 1_000.0
+
+
+_STARTING_CASH = _starting_cash()
 
 
 def _read_json(path: Path) -> Dict[str, Any]:
