@@ -45,8 +45,11 @@
                 color:var(--txt); border-radius:999px; padding:5px 12px;
                 cursor:pointer; font-size:12px; white-space:nowrap; }
   #themeToggle:hover, #termBtn:hover{ background:var(--hover); }
+  /* Closed by default; only the .open class shows it (both ID-level
+     selectors, so specificity is consistent and the toggle is reliable). */
   #terminal{ position:fixed; inset:0; background:rgba(0,0,0,0.72);
-             z-index:50; display:flex; align-items:center; justify-content:center; }
+             z-index:50; display:none; align-items:center; justify-content:center; }
+  #terminal.open{ display:flex; }
   #terminal .term-card{ width:min(1100px,94vw); height:min(80vh,720px);
              background:#050505; border:1px solid #333; border-radius:12px;
              display:flex; flex-direction:column; overflow:hidden; }
@@ -75,8 +78,8 @@
     </div>
   </header>
 
-  <!-- Live terminal / log overlay -->
-  <div id="terminal" class="hidden">
+  <!-- Live terminal / log overlay (hidden until 'See Terminal' is clicked) -->
+  <div id="terminal">
     <div class="term-card">
       <div class="flex items-center justify-between px-3.5 py-2"
            style="border-bottom:1px solid #333;background:#0c0c0c">
@@ -447,13 +450,14 @@ async function refreshTerminal(){
   }
 }
 function openTerminal(){
-  document.getElementById('terminal').classList.remove('hidden');
+  document.getElementById('terminal').classList.add('open');
+  document.getElementById('termBody').textContent='loading…';
   refreshTerminal();
   if(termTimer) clearInterval(termTimer);
   termTimer=setInterval(refreshTerminal,2500);
 }
 function closeTerminal(){
-  document.getElementById('terminal').classList.add('hidden');
+  document.getElementById('terminal').classList.remove('open');
   if(termTimer){ clearInterval(termTimer); termTimer=null; }
 }
 document.getElementById('termBtn').onclick=openTerminal;
