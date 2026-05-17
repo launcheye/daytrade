@@ -151,3 +151,33 @@ def test_dashboard_logs_endpoint(tmp_path):
     body = client.get("/api/logs?lines=50").json()
     assert "lines" in body and isinstance(body["lines"], list)
     assert "exists" in body
+
+
+def test_dashboard_open_without_password_env(tmp_path):
+    """With no DASHBOARD_PASSWORD set the dashboard stays open (local use)."""
+    client = TestClient(create_app(tmp_path / "obs.db"))
+    assert client.get("/api/health").status_code == 200
+
+
+def test_dashboard_password_gate(tmp_path, monkeypatch):
+    """When DASHBOARD_PASSWORD is set, requests need the right password."""
+    import base64
+
+    monkeypatch.setenv("DASHBOARD_PASSWORD", "s3cret")
+    client = TestClient(create_app(tmp_path / "obs.db"))
+
+    # No credentials -> 401 with a Basic-Auth challenge.
+    resp = client.get("/api/health")
+    assert resp.status_code == 401
+    assert resp.headers.get("www-authenticate", "").lower().startswith("basic")
+
+    # Wrong password -> 401.
+    bad = base64.b64encode(b"user:nope").decode()
+    assert client.get("/api/health",
+                      headers={"Authorization": f"Basic {bad}"}).status_code == 401
+
+    # Correct password (any username) -> 200.
+    good = base64.b64encode(b"user:s3cret").decode()
+    ok = client.get("/api/health", headers={"Authorization": f"Basic {good}"})
+    assert ok.status_code == 200
+    assert ok.json()["paper_only"] is True

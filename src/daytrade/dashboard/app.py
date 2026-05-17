@@ -10,7 +10,10 @@ and never writes orders, touches wallets, or moves money.
 from __future__ import annotations
 
 import asyncio
+import base64
 import json
+import os
+import secrets
 from pathlib import Path
 from typing import Any, Dict
 
@@ -24,11 +27,60 @@ from .data import DashboardData
 _log = get_logger("dashboard")
 _STATIC = Path(__file__).resolve().parent / "static"
 
+# Optional HTTP Basic-Auth gate. Enabled only when DASHBOARD_PASSWORD is set,
+# so local runs and the test suite stay open while a public deployment can be
+# locked down. The username is not checked — only the password.
+_PASSWORD_ENV = "DASHBOARD_PASSWORD"
+
+
+class _BasicAuthMiddleware:
+    """ASGI middleware: require HTTP Basic Auth on every http/websocket request."""
+
+    def __init__(self, app, password: str) -> None:
+        self.app = app
+        self._password = password
+
+    async def __call__(self, scope, receive, send) -> None:
+        if scope["type"] in ("http", "websocket") and not self._ok(scope):
+            if scope["type"] == "http":
+                await send({"type": "http.response.start", "status": 401,
+                            "headers": [(b"www-authenticate",
+                                         b'Basic realm="daytrade dashboard"'),
+                                        (b"content-type", b"text/plain")]})
+                await send({"type": "http.response.body",
+                            "body": b"Authentication required"})
+            else:  # reject the websocket handshake
+                await send({"type": "websocket.close", "code": 1008})
+            return
+        await self.app(scope, receive, send)
+
+    def _ok(self, scope) -> bool:
+        raw = dict(scope.get("headers") or []).get(b"authorization")
+        if not raw:
+            return False
+        try:
+            kind, _, encoded = raw.decode().partition(" ")
+            if kind.lower() != "basic":
+                return False
+            _, _, pw = base64.b64decode(encoded).decode("utf-8").partition(":")
+        except Exception:  # noqa: BLE001 - any malformed header == unauthorized
+            return False
+        return secrets.compare_digest(pw, self._password)
+
 
 def create_app(db_path: Path | str = DEFAULT_DB_PATH) -> FastAPI:
     """Build the dashboard FastAPI application bound to ``db_path``."""
     app = FastAPI(title="daytrade — Market Safety Observatory",
                   docs_url="/api/docs")
+
+    password = os.environ.get(_PASSWORD_ENV, "").strip()
+    if password:
+        app.add_middleware(_BasicAuthMiddleware, password=password)
+        _log.info("dashboard password protection ENABLED (%s is set)",
+                  _PASSWORD_ENV)
+    else:
+        _log.info("dashboard password protection disabled — set %s to "
+                  "require a password", _PASSWORD_ENV)
 
     def data() -> DashboardData:
         return DashboardData(db_path)
