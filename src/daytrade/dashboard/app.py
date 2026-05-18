@@ -142,6 +142,10 @@ def create_app(db_path: Path | str = DEFAULT_DB_PATH) -> FastAPI:
     def logs(lines: int = 200) -> Any:
         return _safe(lambda d: d.logs(lines))
 
+    @app.get("/api/db-writes")
+    def db_writes(lines: int = 300) -> Any:
+        return _safe(lambda d: d.db_writes(lines))
+
     @app.get("/api/progress")
     def progress() -> Any:
         return _safe(lambda d: d.progress())

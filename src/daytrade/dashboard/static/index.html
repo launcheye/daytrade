@@ -41,7 +41,7 @@
   ::-webkit-scrollbar{ width:9px; height:9px; }
   ::-webkit-scrollbar-thumb{ background:var(--line); border-radius:5px; }
   ::-webkit-scrollbar-track{ background:transparent; }
-  #themeToggle, #termBtn, #learnBtn{ background:var(--panel); border:1px solid var(--line);
+  #themeToggle, #termBtn, #learnBtn, #dbBtn{ background:var(--panel); border:1px solid var(--line);
                 color:var(--txt); border-radius:999px; padding:5px 12px;
                 cursor:pointer; font-size:12px; white-space:nowrap; }
   #learnBtn{ background:var(--blue); color:#fff; border-color:var(--blue); }
@@ -71,6 +71,17 @@
           margin-bottom:10px; }
   .lcard h4{ margin:0 0 5px; font-size:13px; font-weight:700; }
   .lcard p{ margin:3px 0; font-size:12.5px; color:var(--dim); line-height:1.5; }
+  /* Live database-writes overlay — same dark terminal look. */
+  #dbView{ position:fixed; inset:0; background:rgba(0,0,0,0.72);
+           z-index:50; display:none; align-items:center; justify-content:center; }
+  #dbView.open{ display:flex; }
+  #dbView .term-card{ width:min(1100px,94vw); height:min(80vh,720px);
+           background:#050505; border:1px solid #333; border-radius:12px;
+           display:flex; flex-direction:column; overflow:hidden; }
+  #dbBody{ flex:1; overflow-y:auto; margin:0; padding:12px 14px;
+           font-family:ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+           font-size:11.5px; line-height:1.55; white-space:pre-wrap;
+           word-break:break-all; }
 </style>
 </head>
 <body>
@@ -88,6 +99,7 @@
     <div class="flex items-center gap-3">
       <div id="botStatus" class="text-xs text-right mono"></div>
       <button id="learnBtn" title="See what the bot has learned so far">🧠 What it's learning</button>
+      <button id="dbBtn" title="Live feed of every row the bot writes to the database">🗄 Database</button>
       <button id="termBtn" title="Live log of what the bot is doing">⊟ See Terminal</button>
       <button id="themeToggle" title="Toggle night / light mode">☾ Night</button>
     </div>
@@ -122,6 +134,26 @@
         <button id="learnClose" class="text-xs" style="color:var(--dim)">close ✕</button>
       </div>
       <div id="learnBody">loading…</div>
+    </div>
+  </div>
+
+  <!-- Live database-writes overlay (hidden until 'Database' is clicked) -->
+  <div id="dbView">
+    <div class="term-card">
+      <div class="flex items-center justify-between px-3.5 py-2"
+           style="border-bottom:1px solid #333;background:#0c0c0c">
+        <div class="text-xs font-bold" style="color:#cfcfcf">
+          🗄 daytrade — database writes, live
+          <span id="dbMeta" style="color:#777;font-weight:400"></span>
+        </div>
+        <div class="flex items-center gap-3">
+          <label class="text-[11px]" style="color:#888">
+            <input type="checkbox" id="dbFollow" checked> auto-scroll
+          </label>
+          <button id="dbClose" class="text-xs" style="color:#cfcfcf">close ✕</button>
+        </div>
+      </div>
+      <pre id="dbBody" style="color:#cfcfcf">loading…</pre>
     </div>
   </div>
 
@@ -550,7 +582,42 @@ function closeLearn(){ document.getElementById('learnView').classList.remove('op
 document.getElementById('learnBtn').onclick=openLearn;
 document.getElementById('learnClose').onclick=closeLearn;
 document.getElementById('learnView').onclick=e=>{ if(e.target.id==='learnView') closeLearn(); };
-document.addEventListener('keydown',e=>{ if(e.key==='Escape'){ closeTerminal(); closeLearn(); } });
+
+// --- live database-writes viewer ---
+function _dbColor(line){
+  if(line.indexOf(' INSERT ')>=0) return '#00A651';
+  if(line.indexOf(' UPDATE ')>=0||line.indexOf(' UPSERT ')>=0) return '#0081C8';
+  return '#cfcfcf';
+}
+let dbTimer=null;
+async function refreshDb(){
+  const d=await api('/api/db-writes?lines=500');
+  const body=document.getElementById('dbBody');
+  if(d&&Array.isArray(d.lines)){
+    body.innerHTML=d.lines.length
+      ? d.lines.map(l=>'<div style="color:'+_dbColor(l)+'">'+_esc(l)+'</div>').join('')
+      : '<div style="color:#777">(no database writes yet — the bot may still be starting)</div>';
+    document.getElementById('dbMeta').textContent='· '+d.lines.length+' writes shown · refreshes every 2s';
+    if(document.getElementById('dbFollow').checked) body.scrollTop=body.scrollHeight;
+  } else {
+    body.innerHTML='<div style="color:#777">(no database write-log yet)</div>';
+  }
+}
+function openDb(){
+  document.getElementById('dbView').classList.add('open');
+  document.getElementById('dbBody').textContent='loading…';
+  refreshDb();
+  if(dbTimer) clearInterval(dbTimer);
+  dbTimer=setInterval(refreshDb,2000);
+}
+function closeDb(){
+  document.getElementById('dbView').classList.remove('open');
+  if(dbTimer){ clearInterval(dbTimer); dbTimer=null; }
+}
+document.getElementById('dbBtn').onclick=openDb;
+document.getElementById('dbClose').onclick=closeDb;
+document.getElementById('dbView').onclick=e=>{ if(e.target.id==='dbView') closeDb(); };
+document.addEventListener('keydown',e=>{ if(e.key==='Escape'){ closeTerminal(); closeLearn(); closeDb(); } });
 
 async function renderProgress(){
   const p=await api('/api/progress'); if(!p||p.error) return;

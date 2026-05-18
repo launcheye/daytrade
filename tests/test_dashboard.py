@@ -162,6 +162,14 @@ def test_dashboard_gates_endpoint(tmp_path):
         assert key in body
 
 
+def test_dashboard_db_writes_endpoint(tmp_path):
+    """The /api/db-writes endpoint returns the database write-log tail."""
+    client = TestClient(create_app(tmp_path / "obs.db"))
+    body = client.get("/api/db-writes").json()
+    assert "lines" in body and isinstance(body["lines"], list)
+    assert "exists" in body
+
+
 def test_dashboard_learning_summary_endpoint(tmp_path):
     """The /api/learning-summary endpoint returns plain-language cards."""
     client = TestClient(create_app(_learning_db(tmp_path)))

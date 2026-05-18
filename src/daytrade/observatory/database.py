@@ -139,6 +139,10 @@ class ObservatoryDB:
         self._conn.execute("PRAGMA synchronous=NORMAL")
         self._conn.executescript(_SCHEMA)
         self._conn.commit()
+        # Human-readable, append-only log of every DB write — tailed live by
+        # the dashboard's "Database" view.
+        self._writelog_path = _REPO_ROOT / "logs" / "db-writes.log"
+        self._writelog_path.parent.mkdir(parents=True, exist_ok=True)
 
     def close(self) -> None:
         self._conn.close()
@@ -167,6 +171,7 @@ class ObservatoryDB:
             list(cols.values()),
         )
         self._conn.commit()
+        self._writelog("UPSERT", "prediction_outcomes", prediction_id, f)
 
     def mark_prediction_evaluated(self, prediction_id: int) -> None:
         self._conn.execute("UPDATE predictions SET evaluated=1 WHERE id=?",
@@ -187,6 +192,9 @@ class ObservatoryDB:
             (ts_close or _now(), exit_price, pnl, fees, slippage, trade_id),
         )
         self._conn.commit()
+        self._writelog("UPDATE", "paper_trades", trade_id,
+                        {"event": "closed", "exit_price": exit_price,
+                         "pnl": pnl})
 
     def insert_safety_score(self, **f: Any) -> int:
         row = {"ts": f.get("ts", _now()), **f}
@@ -392,7 +400,30 @@ class ObservatoryDB:
             f"INSERT INTO {table} ({names}) VALUES ({placeholders})",
             list(row.values()))
         self._conn.commit()
-        return int(cur.lastrowid)
+        rowid = int(cur.lastrowid)
+        self._writelog("INSERT", table, rowid, row)
+        return rowid
+
+    def _writelog(self, op: str, table: str, rowid: Any,
+                  fields: Dict[str, Any]) -> None:
+        """Append a one-line human record of a DB write (best-effort)."""
+        notable = ("symbol", "direction", "event", "status", "price", "pnl",
+                   "exit_price", "score", "confidence", "level",
+                   "directionally_correct", "detail")
+        parts = []
+        for key in notable:
+            value = fields.get(key)
+            if value is None or value == "":
+                continue
+            if isinstance(value, float):
+                value = f"{value:.6g}"
+            parts.append(f"{key}={value}")
+        line = f"{_now()}  {op:<6} {table:<19} #{rowid}  {' '.join(parts)}\n"
+        try:
+            with self._writelog_path.open("a", encoding="utf-8") as fh:
+                fh.write(line)
+        except Exception:  # noqa: BLE001 - logging must never break a write
+            pass
 
     def _one(self, sql: str, params: tuple = ()) -> Optional[Dict[str, Any]]:
         row = self._conn.execute(sql, params).fetchone()

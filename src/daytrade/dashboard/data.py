@@ -28,6 +28,7 @@ _NOW_PATH = _REPO_ROOT / "data" / "now.json"
 _LEARNING_STATE = _REPO_ROOT / "data" / "learning_state.json"
 _DAILY_DIR = _REPO_ROOT / "reports" / "daily"
 _LOG_FILE = _REPO_ROOT / "logs" / "daytrade.log"
+_DBWRITE_LOG = _REPO_ROOT / "logs" / "db-writes.log"
 
 # A heartbeat older than this means the observer is not considered "live".
 _HEARTBEAT_STALE_SECONDS = 1200.0
@@ -388,6 +389,15 @@ class DashboardData:
             "file": "logs/daytrade.log",
             "exists": _LOG_FILE.exists(),
             "lines": _tail(_LOG_FILE, n),
+        }
+
+    def db_writes(self, lines: int = 300) -> Dict[str, Any]:
+        """Tail of the database write-log — every row the bot writes, live."""
+        n = max(1, min(int(lines), 2000))
+        return {
+            "file": "logs/db-writes.log",
+            "exists": _DBWRITE_LOG.exists(),
+            "lines": _tail(_DBWRITE_LOG, n),
         }
 
     def regimes(self) -> Dict[str, Any]:
