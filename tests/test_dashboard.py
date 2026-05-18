@@ -153,6 +153,15 @@ def test_dashboard_logs_endpoint(tmp_path):
     assert "exists" in body
 
 
+def test_dashboard_gates_endpoint(tmp_path):
+    """The /api/gates endpoint summarises the Phase 1-4 strategy gates."""
+    client = TestClient(create_app(tmp_path / "obs.db"))
+    body = client.get("/api/gates").json()
+    for key in ("regime_blocks", "calibration_blocks", "meta_blocks",
+                "meta_status"):
+        assert key in body
+
+
 def test_dashboard_open_without_password_env(tmp_path):
     """With no DASHBOARD_PASSWORD set the dashboard stays open (local use)."""
     client = TestClient(create_app(tmp_path / "obs.db"))

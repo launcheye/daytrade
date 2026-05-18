@@ -166,6 +166,10 @@ def create_app(db_path: Path | str = DEFAULT_DB_PATH) -> FastAPI:
     def activity() -> Any:
         return _safe(lambda d: d.activity())
 
+    @app.get("/api/gates")
+    def gates() -> Any:
+        return _safe(lambda d: d.gates())
+
     @app.get("/api/predictions")
     def predictions() -> Any:
         return _safe(lambda d: d.predictions())

@@ -166,6 +166,13 @@
       <div class="card p-4"><div class="lbl mb-2">⚡ Bot activity feed</div>
         <div id="activityFeed" class="text-xs space-y-1 max-h-[210px] overflow-y-auto"></div></div>
     </div>
+    <div class="card p-4 mt-4">
+      <div class="lbl mb-2">🛡 Strategy gates — trades suppressed before they were taken</div>
+      <div id="gatesPanel" class="grid grid-cols-2 md:grid-cols-4 gap-3 text-[13px]"></div>
+      <p class="text-[11px] mt-2" style="color:var(--dim)">Wider ATR stops, a regime
+        gate, confidence calibration and a meta-labelling model now filter every
+        BUY. Fewer trades, higher precision — paper / simulation only.</p>
+    </div>
   </section>
 
   <section id="tab-progress" class="tab-panel hidden">
@@ -406,6 +413,18 @@ async function renderOverview(){
       '<span style="color:'+(c[e.level]||'var(--dim)')+'">'+e.event+'</span>'+
       (e.detail?' <span style="color:var(--faint)">— '+e.detail+'</span>':'')+'</div>').join('')
       ||'<span style="color:var(--dim)">No activity yet — start the bot.</span>';
+  }
+  const g=await api('/api/gates');
+  if(g&&!g.error){
+    const cell=(label,value,sub)=>'<div style="border:1px solid var(--line2);border-radius:8px;padding:8px 10px">'+
+      '<div style="color:var(--dim);font-size:11px">'+label+'</div>'+
+      '<div class="mono font-bold text-lg">'+value+'</div>'+
+      '<div style="color:var(--faint);font-size:10px">'+(sub||'')+'</div></div>';
+    document.getElementById('gatesPanel').innerHTML=
+      cell('Regime gate',g.regime_blocks,'blocked (weak regime)')+
+      cell('Calibration gate',g.calibration_blocks,'blocked (fake confidence)')+
+      cell('Meta-model gate',g.meta_blocks,'blocked (low win prob)')+
+      cell('Meta-model',g.meta_status==='trained'?'● trained':'○ warming up',g.meta_detail||'');
   }
 }
 function renderNow(s){

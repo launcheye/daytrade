@@ -418,6 +418,35 @@ class DashboardData:
     def activity(self, limit: int = 60) -> List[Dict[str, Any]]:
         return self.db.recent_activity(limit)
 
+    def gates(self) -> Dict[str, Any]:
+        """Strategy-gate summary: how often each decision gate blocked a trade.
+
+        Counts the Phase 1-4 gates from the recent activity feed so the
+        dashboard can show the strategy overhaul actually working.
+        """
+        rows = self.db.recent_activity(limit=800)
+        regime = calibration = meta = 0
+        meta_status = "warming up"
+        meta_detail = ""
+        for r in rows:
+            event = r.get("event", "") or ""
+            if event.startswith("regime gate blocked"):
+                regime += 1
+            elif event.startswith("calibration gate blocked"):
+                calibration += 1
+            elif event.startswith("meta-model blocked"):
+                meta += 1
+            elif event == "meta-model retrained" and meta_status == "warming up":
+                meta_status = "trained"
+                meta_detail = r.get("detail", "") or ""
+        return {
+            "regime_blocks": regime,
+            "calibration_blocks": calibration,
+            "meta_blocks": meta,
+            "meta_status": meta_status,
+            "meta_detail": meta_detail,
+        }
+
     def predictions(self, limit: int = 100) -> List[Dict[str, Any]]:
         return self.db.recent_predictions(limit=limit)
 
