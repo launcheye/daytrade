@@ -36,6 +36,7 @@ from .daily_report import write_daily_report
 from .database import ObservatoryDB
 from .feed import LiveMockFeed
 from .metrics import roll_up_day
+from ..ml.meta import MetaLabelModel
 from .calibration import ConfidenceCalibrator
 from .prediction_tracker import build_prediction_memory, evaluate_prediction
 from .readiness import ReadinessInputs, compute_readiness
@@ -113,6 +114,11 @@ class Observer:
         self._open: Dict[str, Dict[str, float]] = {}
         self._risk = RiskEngine(config.risk, self._starting_cash)
         self._peak_equity = self._starting_cash
+        # Meta-labelling model (Phase 4): a precision filter on BUY signals,
+        # retrained periodically on pooled triple-barrier outcomes.
+        self._meta = MetaLabelModel()
+        self._meta_retrain_every = 30
+        self._meta_candles: Dict[str, list] = {}
 
     # -- lifecycle -----------------------------------------------------------
 
@@ -189,6 +195,9 @@ class Observer:
                     illiquid.append(symbol)
             summary.predictions_made += 1
 
+        # Periodically retrain the meta-labelling model on pooled history.
+        self._maybe_retrain_meta()
+
         # Evaluate matured predictions against reality.
         self._set_now("Updating outcomes", "", now)
         summary.predictions_evaluated = self._evaluate_predictions(now)
@@ -264,6 +273,8 @@ class Observer:
         orderbook = self.feed.orderbook_at(symbol, now)
         tick = self.feed.tick_at(symbol, now)
         price = candles[-1].close
+        # Keep this symbol's candles for the next meta-model retrain.
+        self._meta_candles[symbol] = candles
 
         result = self.pipeline.analyze(candles, orderbook, reference_price=price)
         tech, micro, macro = result.technical, result.microstructure, result.macro
@@ -342,11 +353,43 @@ class Observer:
             self.config.gating.min_regime_accuracy,
             self.config.gating.regime_min_samples)
 
+        # --- meta-labelling gate: P(this long hits target before stop) ---
+        meta_proba: Optional[float] = None
+        if self._meta.is_trained:
+            try:
+                meta_proba = self._meta.predict_win_proba(candles, self.config)
+            except Exception:  # noqa: BLE001 - a scoring failure never blocks
+                meta_proba = None
+
         # --- paper-trading simulation step (entry only; exits in _manage) ---
         self._maybe_open_position(symbol, decision, screening, price,
                                   liquidity_notional, equity, now,
-                                  prediction_id, regime_gate, calibrator)
+                                  prediction_id, regime_gate, calibrator,
+                                  meta_proba)
         return safety
+
+    def _maybe_retrain_meta(self) -> None:
+        """Retrain the meta-labelling model on this cycle's pooled candles.
+
+        Runs on the first cycle and every ``_meta_retrain_every`` cycles. A
+        training failure is logged but never aborts the cycle.
+        """
+        if not self._meta_candles:
+            return
+        due = self._cycle == 1 or self._cycle % self._meta_retrain_every == 0
+        if not due:
+            return
+        try:
+            result = self._meta.train(list(self._meta_candles.values()),
+                                      self.config)
+        except Exception as exc:  # noqa: BLE001 - training must never kill a cycle
+            _log.warning("meta-model retrain failed: %s", exc)
+            return
+        if result is not None:
+            self._activity(
+                "meta-model retrained",
+                f"{result.samples} samples · base win rate "
+                f"{result.base_win_rate:.0%}")
 
     def _evaluate_predictions(self, now: datetime) -> int:
         """Score every matured-but-unevaluated prediction against reality."""
@@ -479,8 +522,8 @@ class Observer:
                              liquidity_notional: float, equity: float,
                              now: datetime, prediction_id: int,
                              regime_gate=None,
-                             calibrator: Optional[ConfidenceCalibrator] = None
-                             ) -> None:
+                             calibrator: Optional[ConfidenceCalibrator] = None,
+                             meta_proba: Optional[float] = None) -> None:
         if symbol in self._open or not screening.approved:
             return
         if decision.action is not Action.BUY or decision.kill_switch_active:
@@ -502,6 +545,15 @@ class Observer:
                     f"calibration gate blocked {symbol}",
                     f"calibrated win prob {calibrated:.0%} below {floor:.0%} "
                     f"(stated {decision.confidence:.0%})")
+                return
+        # Meta-labelling gate: skip a BUY the precision model scores below the
+        # win-probability floor (Phase 4 — the de Prado meta-label filter).
+        if meta_proba is not None:
+            floor = self.config.gating.meta_label_min_proba
+            if meta_proba < floor:
+                self._activity(
+                    f"meta-model blocked {symbol}",
+                    f"win probability {meta_proba:.0%} below {floor:.0%}")
                 return
         permission = self._risk.evaluate_entry(
             equity, open_positions=len(self._open), bar_index=self._cycle)

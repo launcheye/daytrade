@@ -66,6 +66,58 @@ def breakout_label(
     return label
 
 
+def triple_barrier_label(
+    frame: pd.DataFrame,
+    stop_distance: pd.Series,
+    target_distance: pd.Series,
+    max_hold: int,
+) -> pd.Series:
+    """Triple-barrier label for a LONG entry (Lopez de Prado).
+
+    For each bar: enter at the close, place a stop ``stop_distance`` below and
+    a target ``target_distance`` above, then walk forward up to ``max_hold``
+    bars (the vertical barrier).
+
+    * ``1``   — the target was reached first (a winning trade)
+    * ``0``   — the stop was reached first, or the vertical barrier expired
+    * ``NaN`` — not enough future bars to resolve the outcome (dropped in
+      training)
+
+    If a single bar touches both barriers the stop is assumed first — the
+    same pessimistic convention the backtester uses.
+    """
+    if max_hold < 1:
+        raise ValueError("max_hold must be >= 1")
+    high = frame["high"].to_numpy(dtype=float)
+    low = frame["low"].to_numpy(dtype=float)
+    close = frame["close"].to_numpy(dtype=float)
+    sd = np.asarray(stop_distance, dtype=float)
+    td = np.asarray(target_distance, dtype=float)
+    n = len(close)
+    out = np.full(n, np.nan)
+
+    for i in range(n - 1):
+        if not (np.isfinite(sd[i]) and np.isfinite(td[i])):
+            continue
+        stop = close[i] - sd[i]
+        target = close[i] + td[i]
+        end = min(i + max_hold, n - 1)
+        resolved: "float | None" = None
+        for j in range(i + 1, end + 1):
+            if low[j] <= stop:
+                resolved = 0.0
+                break
+            if high[j] >= target:
+                resolved = 1.0
+                break
+        if resolved is not None:
+            out[i] = resolved
+        elif end - i >= max_hold:
+            out[i] = 0.0  # full vertical barrier reached, never hit -> timeout
+
+    return pd.Series(out, index=frame.index, name="meta_label")
+
+
 def make_labels(
     frame: pd.DataFrame,
     horizon: int,

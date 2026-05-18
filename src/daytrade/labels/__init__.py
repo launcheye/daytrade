@@ -7,11 +7,13 @@ from .generate import (
     directional_label,
     future_return,
     make_labels,
+    triple_barrier_label,
 )
 
 __all__ = [
     "future_return",
     "directional_label",
     "breakout_label",
+    "triple_barrier_label",
     "make_labels",
 ]
