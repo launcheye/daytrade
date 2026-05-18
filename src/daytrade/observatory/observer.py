@@ -36,6 +36,7 @@ from .daily_report import write_daily_report
 from .database import ObservatoryDB
 from .feed import LiveMockFeed
 from .metrics import roll_up_day
+from .calibration import ConfidenceCalibrator
 from .prediction_tracker import build_prediction_memory, evaluate_prediction
 from .readiness import ReadinessInputs, compute_readiness
 from .regime_gate import evaluate_regime_gate
@@ -157,6 +158,11 @@ class Observer:
         recent_accuracy = memory.overall_accuracy if memory.total >= 10 else None
         summary.recent_accuracy = recent_accuracy
 
+        # Calibrate stated confidence against the strategy's own track record.
+        calibrator = ConfidenceCalibrator.fit(
+            ((o.get("confidence"), o.get("directionally_correct"))
+             for o in self.db.outcomes(limit=3000)))
+
         equity = self._equity(now)
         self._risk.observe_equity(now, equity)
 
@@ -168,7 +174,8 @@ class Observer:
                           symbol_index=idx, symbol_total=len(watch))
             try:
                 assessment = self._observe_symbol(symbol, now, memory,
-                                                  recent_accuracy, equity)
+                                                  recent_accuracy, equity,
+                                                  calibrator)
             except Exception as exc:  # noqa: BLE001 - one symbol must not kill the cycle
                 self.db.insert_error(f"observe:{symbol}", repr(exc))
                 self._errors_this_cycle += 1
@@ -250,7 +257,8 @@ class Observer:
         return summary
 
     def _observe_symbol(self, symbol: str, now: datetime, memory,
-                        recent_accuracy: Optional[float], equity: float):
+                        recent_accuracy: Optional[float], equity: float,
+                        calibrator: Optional[ConfidenceCalibrator] = None):
         """Observe one symbol: analyse, score, record, maybe paper-trade."""
         candles = self.feed.candles_at(symbol, now, n_bars=240)
         orderbook = self.feed.orderbook_at(symbol, now)
@@ -337,7 +345,7 @@ class Observer:
         # --- paper-trading simulation step (entry only; exits in _manage) ---
         self._maybe_open_position(symbol, decision, screening, price,
                                   liquidity_notional, equity, now,
-                                  prediction_id, regime_gate)
+                                  prediction_id, regime_gate, calibrator)
         return safety
 
     def _evaluate_predictions(self, now: datetime) -> int:
@@ -470,7 +478,9 @@ class Observer:
     def _maybe_open_position(self, symbol: str, decision, screening, price: float,
                              liquidity_notional: float, equity: float,
                              now: datetime, prediction_id: int,
-                             regime_gate=None) -> None:
+                             regime_gate=None,
+                             calibrator: Optional[ConfidenceCalibrator] = None
+                             ) -> None:
         if symbol in self._open or not screening.approved:
             return
         if decision.action is not Action.BUY or decision.kill_switch_active:
@@ -481,6 +491,18 @@ class Observer:
         if regime_gate is not None and not regime_gate.allowed:
             self._activity(f"regime gate blocked {symbol}", regime_gate.reason)
             return
+        # Calibration gate: skip a BUY whose calibrated win probability —
+        # the strategy's stated confidence corrected against its own track
+        # record — is below the floor (Phase 3).
+        if calibrator is not None:
+            calibrated = calibrator.calibrate(decision.confidence)
+            floor = self.config.gating.min_calibrated_confidence
+            if calibrated < floor:
+                self._activity(
+                    f"calibration gate blocked {symbol}",
+                    f"calibrated win prob {calibrated:.0%} below {floor:.0%} "
+                    f"(stated {decision.confidence:.0%})")
+                return
         permission = self._risk.evaluate_entry(
             equity, open_positions=len(self._open), bar_index=self._cycle)
         if not permission.allowed:
