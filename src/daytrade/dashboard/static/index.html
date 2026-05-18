@@ -184,6 +184,7 @@
 
   <nav class="flex flex-wrap gap-1.5 mb-4 text-[13px]">
     <button data-tab="overview"    class="tab px-3.5 py-1.5 rounded-lg">Command Center</button>
+    <button data-tab="markets"     class="tab px-3.5 py-1.5 rounded-lg">Markets</button>
     <button data-tab="progress"    class="tab px-3.5 py-1.5 rounded-lg">Progress</button>
     <button data-tab="symbols"     class="tab px-3.5 py-1.5 rounded-lg">Symbols</button>
     <button data-tab="regimes"     class="tab px-3.5 py-1.5 rounded-lg">Regimes</button>
@@ -353,6 +354,34 @@
     <div class="card p-4"><div class="lbl mb-2">Recent alerts & errors</div><div id="riskErrors" class="text-xs"></div></div>
   </section>
 
+  <section id="tab-markets" class="tab-panel hidden">
+    <div class="grid lg:grid-cols-2 gap-4">
+      <div class="card p-4">
+        <div class="flex items-baseline justify-between">
+          <div><span class="font-bold text-base">₿ Bitcoin</span>
+            <span class="lbl">BTC / USDT</span></div>
+          <div class="text-right"><span id="mkBTCprice" class="font-bold mono">—</span>
+            <span id="mkBTCchg" class="text-xs mono ml-1"></span></div>
+        </div>
+        <div id="mkBTCtoggle" class="flex gap-1.5 my-2.5 flex-wrap"></div>
+        <div id="mkBTCchart" style="height:250px"></div>
+      </div>
+      <div class="card p-4">
+        <div class="flex items-baseline justify-between">
+          <div><span class="font-bold text-base">Ξ Ethereum</span>
+            <span class="lbl">ETH / USDT</span></div>
+          <div class="text-right"><span id="mkETHprice" class="font-bold mono">—</span>
+            <span id="mkETHchg" class="text-xs mono ml-1"></span></div>
+        </div>
+        <div id="mkETHtoggle" class="flex gap-1.5 my-2.5 flex-wrap"></div>
+        <div id="mkETHchart" style="height:250px"></div>
+      </div>
+    </div>
+    <p class="text-[11px] mt-3" style="color:var(--faint)">Live read-only price
+      history from Binance. Prices in USDT (≈ US dollars). This is the real
+      market the bot watches — viewing only, no trading.</p>
+  </section>
+
   <footer class="text-center text-[11px] mt-6" style="color:var(--faint)">
     daytrade · paper / simulation only · no real trading · no wallets · no bank transfers ·
     conditions analysis, never financial advice · <span id="updated"></span>
@@ -370,12 +399,15 @@ let charts={};
 const fmt=(n,d=2)=>(n==null||isNaN(n))?'—':Number(n).toLocaleString(undefined,{maximumFractionDigits:d});
 const pct=n=>(n==null||isNaN(n))?'—':Number(n).toFixed(1)+'%';
 // API timestamps are UTC ISO strings — render them in the viewer's local timezone.
-const _ld=ts=>{ if(!ts) return null; let s=String(ts);
+const _ld=ts=>{ if(ts==null) return null;
+  if(typeof ts==='number'){ const dn=new Date(ts); return isNaN(dn)?null:dn; }
+  let s=String(ts);
   if(s.includes('T')&&!/(Z|[+-]\d\d:?\d\d)$/.test(s)) s+='Z';
   const d=new Date(s); return isNaN(d)?null:d; };
 const tHMS=ts=>{ const d=_ld(ts); return d?d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'}):''; };
 const tHM=ts=>{ const d=_ld(ts); return d?d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}):''; };
 const tMD=ts=>{ const d=_ld(ts); return d?d.toLocaleString([],{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}):''; };
+const tDay=ts=>{ const d=_ld(ts); return d?d.toLocaleDateString([],{month:'short',day:'numeric'}):''; };
 async function api(p){ try{ return await (await fetch(p)).json(); }catch(e){ return {error:String(e)}; } }
 function chart(id){ if(!charts[id]){ const el=document.getElementById(id); if(el) charts[id]=echarts.init(el); } return charts[id]; }
 // Theme-aware chart colours (read from CSS variables on demand).
@@ -795,6 +827,43 @@ async function renderPaper(){
       '<td class="mono" style="color:'+c+'">'+(t.pnl>=0?'+':'')+'€'+fmt(t.pnl,2)+'</td></tr>';
   }).join('')||'<tr><td colspan="8" style="color:var(--dim)">No closed transactions yet.</td></tr>';
 }
+// --- Markets tab: BTC / ETH price charts with range toggles ---
+const _MK=[{sym:'BTCUSDT',el:'BTC'},{sym:'ETHUSDT',el:'ETH'}];
+const _MK_RANGES=['1D','5D','1M','6M','1Y'];
+const _mkRange={BTCUSDT:'1D',ETHUSDT:'1D'};
+async function drawMarket(m){
+  const range=_mkRange[m.sym], t=tc();
+  document.getElementById('mk'+m.el+'toggle').innerHTML=_MK_RANGES.map(r=>
+    '<button onclick="setMkRange(\''+m.sym+'\',\''+r+'\')" class="px-2.5 py-1 rounded-md text-xs mono" '+
+    'style="cursor:pointer;border:1px solid var(--line);'+
+    (r===range?'background:var(--blue);color:#fff':'background:var(--panel);color:var(--dim)')+
+    '">'+r+'</button>').join('');
+  const d=await api('/api/price-chart?symbol='+m.sym+'&range='+range);
+  const pEl=document.getElementById('mk'+m.el+'price'), cEl=document.getElementById('mk'+m.el+'chg');
+  if(!d||d.error||!Array.isArray(d.points)||!d.points.length){
+    pEl.textContent='—'; cEl.textContent='(data unavailable)'; cEl.style.color='var(--dim)';
+    return;
+  }
+  pEl.textContent='$'+fmt(d.last,2);
+  const up=d.change_pct>=0;
+  cEl.textContent=(up?'+':'')+d.change_pct+'%'; cEl.style.color=up?'var(--up)':'var(--down)';
+  const intraday=(range==='1D'||range==='5D');
+  const col=up?'#00A651':'#EE334E';
+  chart('mk'+m.el+'chart').setOption({backgroundColor:'transparent',
+    grid:{left:64,right:14,top:12,bottom:24},
+    xAxis:{type:'category',data:d.points.map(p=>intraday?tHM(p.ts):tDay(p.ts)),
+      axisLabel:{color:t.axis,fontSize:9},axisLine:{lineStyle:{color:t.grid}}},
+    yAxis:{type:'value',scale:true,axisLabel:{color:t.axis,formatter:v=>'$'+fmt(v,0)},
+      splitLine:{lineStyle:{color:t.grid}}},
+    tooltip:{trigger:'axis',valueFormatter:v=>'$'+fmt(v,2)},
+    series:[{type:'line',smooth:true,symbol:'none',data:d.points.map(p=>p.price),
+      lineStyle:{color:col,width:2},
+      areaStyle:{color:new echarts.graphic.LinearGradient(0,0,0,1,
+        [{offset:0,color:col+'40'},{offset:1,color:col+'05'}])}}]});
+}
+function setMkRange(sym,r){ _mkRange[sym]=r; drawMarket(_MK.find(m=>m.sym===sym)); }
+async function renderMarkets(){ for(const m of _MK){ await drawMarket(m); } }
+
 async function renderRisk(){
   const r=await api('/api/risk'); if(!r||r.error) return;
   const list=(a,e)=>a&&a.length?a.map(x=>'<div class="py-0.5">• '+x+'</div>').join(''):
@@ -827,8 +896,9 @@ function showTab(name){
 }
 document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>showTab(b.dataset.tab));
 function refreshTab(){
-  ({overview:renderOverview,progress:renderProgress,symbols:renderSymbols,regimes:renderRegimes,
-    calibration:renderCalibration,accuracy:renderAccuracy,paper:renderPaper,risk:renderRisk}[activeTab]||(()=>{}))();
+  ({overview:renderOverview,markets:renderMarkets,progress:renderProgress,symbols:renderSymbols,
+    regimes:renderRegimes,calibration:renderCalibration,accuracy:renderAccuracy,
+    paper:renderPaper,risk:renderRisk}[activeTab]||(()=>{}))();
 }
 
 // --- night / light theme toggle ---

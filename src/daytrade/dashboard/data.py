@@ -9,9 +9,12 @@ works even before the observer has run.
 from __future__ import annotations
 
 import json
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+
+import httpx
 
 from ..config import load_config
 from ..observatory.database import DEFAULT_DB_PATH, ObservatoryDB
@@ -29,6 +32,18 @@ _LEARNING_STATE = _REPO_ROOT / "data" / "learning_state.json"
 _DAILY_DIR = _REPO_ROOT / "reports" / "daily"
 _LOG_FILE = _REPO_ROOT / "logs" / "daytrade.log"
 _DBWRITE_LOG = _REPO_ROOT / "logs" / "db-writes.log"
+
+# Price-chart ranges -> (Binance kline interval, number of candles).
+_CHART_RANGES: Dict[str, "tuple[str, int]"] = {
+    "1D": ("15m", 96),
+    "5D": ("1h", 120),
+    "1M": ("4h", 180),
+    "6M": ("1d", 182),
+    "1Y": ("1d", 365),
+}
+# Small in-process cache so toggling ranges does not hammer Binance.
+_CHART_CACHE: Dict[str, "tuple[float, Dict[str, Any]]"] = {}
+_CHART_TTL = 45.0
 
 # A heartbeat older than this means the observer is not considered "live".
 _HEARTBEAT_STALE_SECONDS = 1200.0
@@ -390,6 +405,46 @@ class DashboardData:
             "exists": _LOG_FILE.exists(),
             "lines": _tail(_LOG_FILE, n),
         }
+
+    def price_chart(self, symbol: str = "BTCUSDT",
+                    range_key: str = "1D") -> Dict[str, Any]:
+        """Real Binance price history for ``symbol`` over the given range.
+
+        Read-only public market data (no key, no account) — the same source
+        the bot observes. Cached briefly so range toggles stay snappy.
+        """
+        symbol = (symbol or "BTCUSDT").upper().strip()
+        range_key = range_key if range_key in _CHART_RANGES else "1D"
+        interval, limit = _CHART_RANGES[range_key]
+
+        cache_key = f"{symbol}:{range_key}"
+        cached = _CHART_CACHE.get(cache_key)
+        now = time.time()
+        if cached and now - cached[0] < _CHART_TTL:
+            return cached[1]
+
+        try:
+            with httpx.Client(base_url="https://data-api.binance.vision",
+                              timeout=10.0) as client:
+                resp = client.get("/api/v3/klines", params={
+                    "symbol": symbol, "interval": interval, "limit": limit})
+                resp.raise_for_status()
+                klines = resp.json()
+        except Exception as exc:  # noqa: BLE001 - a fetch failure is not fatal
+            return {"symbol": symbol, "range": range_key, "points": [],
+                    "error": f"could not reach Binance: {exc!r}"}
+
+        points = [{"ts": int(k[6]), "price": float(k[4])} for k in klines]
+        first = points[0]["price"] if points else 0.0
+        last = points[-1]["price"] if points else 0.0
+        change = ((last - first) / first * 100.0) if first else 0.0
+        result = {
+            "symbol": symbol, "range": range_key, "interval": interval,
+            "points": points, "last": last,
+            "change_pct": round(change, 2),
+        }
+        _CHART_CACHE[cache_key] = (now, result)
+        return result
 
     def db_writes(self, lines: int = 300) -> Dict[str, Any]:
         """Tail of the database write-log — every row the bot writes, live."""

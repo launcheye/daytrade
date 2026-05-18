@@ -162,6 +162,15 @@ def test_dashboard_gates_endpoint(tmp_path):
         assert key in body
 
 
+def test_dashboard_price_chart_endpoint(tmp_path):
+    """The /api/price-chart endpoint returns a chart payload (any network state)."""
+    client = TestClient(create_app(tmp_path / "obs.db"))
+    body = client.get("/api/price-chart?symbol=BTCUSDT&range=1D").json()
+    assert body.get("symbol") == "BTCUSDT"
+    assert body.get("range") == "1D"
+    assert "points" in body  # populated if Binance is reachable, else []
+
+
 def test_dashboard_db_writes_endpoint(tmp_path):
     """The /api/db-writes endpoint returns the database write-log tail."""
     client = TestClient(create_app(tmp_path / "obs.db"))

@@ -146,6 +146,10 @@ def create_app(db_path: Path | str = DEFAULT_DB_PATH) -> FastAPI:
     def db_writes(lines: int = 300) -> Any:
         return _safe(lambda d: d.db_writes(lines))
 
+    @app.get("/api/price-chart")
+    def price_chart(symbol: str = "BTCUSDT", range: str = "1D") -> Any:
+        return _safe(lambda d: d.price_chart(symbol, range))
+
     @app.get("/api/progress")
     def progress() -> Any:
         return _safe(lambda d: d.progress())
