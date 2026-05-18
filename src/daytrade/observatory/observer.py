@@ -484,7 +484,7 @@ class Observer:
         self._open[symbol] = {
             "trade_id": trade_id, "qty": sizing.quantity,
             "entry": decision.entry, "stop": decision.stop,
-            "target": decision.target,
+            "target": decision.target, "opened_cycle": self._cycle,
         }
         self._activity(f"paper trade opened: {symbol}",
                        f"qty {sizing.quantity:.4f} @ {decision.entry:.4f} (sim)")
@@ -494,6 +494,7 @@ class Observer:
     def _manage_positions(self, now: datetime) -> int:
         """Close any open paper position whose stop or target was reached."""
         closed = 0
+        max_hold = self.config.risk.max_hold_bars
         for symbol, pos in list(self._open.items()):
             price = self.feed.price_at(symbol, now)
             exit_price: Optional[float] = None
@@ -501,6 +502,10 @@ class Observer:
                 exit_price = pos["stop"]
             elif price >= pos["target"]:
                 exit_price = pos["target"]
+            elif max_hold > 0 and \
+                    self._cycle - pos.get("opened_cycle", self._cycle) >= max_hold:
+                # Triple-barrier vertical: time-stop a stalled position.
+                exit_price = price
             if exit_price is None:
                 continue
             qty = pos["qty"]

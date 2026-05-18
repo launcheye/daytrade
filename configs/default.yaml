@@ -81,9 +81,9 @@ fusion:
   action_threshold: 0.15
   min_confidence: 0.35
   entry_offset_vol_mult: 1.0       # entry offset, in volatility units
-  stop_vol_mult: 1.0               # stop distance from entry
-  target_vol_mult: 5.0             # target distance from entry
-  min_volatility_fraction: 0.002   # volatility-unit floor (fraction of price)
+  stop_vol_mult: 2.0               # stop distance — 2x ATR clears routine noise
+  target_vol_mult: 3.0             # target distance — 1.5:1 reward:risk (sweep-best)
+  min_volatility_fraction: 0.004   # vol-unit floor; raised so 1m stops clear noise
   max_volatility_fraction: 0.05    # volatility-unit cap
 
 killswitch:
@@ -103,6 +103,7 @@ risk:
   max_weekly_loss_pct: 0.12       # rolling 7-day loss limit
   max_open_positions: 3
   loss_cooldown_bars: 20          # wait after a losing trade
+  max_hold_bars: 48               # triple-barrier time-stop for stalled positions
   partial_fill_liquidity_frac: 0.25
 
 paper:

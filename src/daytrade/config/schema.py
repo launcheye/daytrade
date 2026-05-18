@@ -199,14 +199,20 @@ class FusionConfig(_Section):
         default=1.0, ge=0,
         description="Entry is offset this many volatility units toward a better fill.",
     )
-    stop_vol_mult: float = Field(default=1.0, gt=0,
+    # Stop/target widths calibrated by a backtest sweep over real history
+    # (see docs/STRATEGY-IMPROVEMENT-PLAN.md, Phase 1). A 2.0x stop sits
+    # outside routine noise; a 3.0x target gives a 1.5:1 reward:risk — the
+    # sweep's best combination on out-of-sample data (best return, 58% win
+    # rate vs the old 1.0x/5.0x stop's fragile 33%).
+    stop_vol_mult: float = Field(default=2.0, gt=0,
                                  description="Stop distance from entry, in vol units.")
-    target_vol_mult: float = Field(default=5.0, gt=0,
+    target_vol_mult: float = Field(default=3.0, gt=0,
                                    description="Target distance from entry, in vol units.")
     min_volatility_fraction: float = Field(
-        default=0.002, gt=0,
+        default=0.004, gt=0,
         description="Volatility-unit floor as a fraction of price — keeps stops "
-                    "from being placed unrealistically tight in calm markets.",
+                    "from being placed unrealistically tight in calm markets. "
+                    "Raised to 0.004 so the stop clears 1-minute market noise.",
     )
     max_volatility_fraction: float = Field(
         default=0.05, gt=0,
@@ -259,6 +265,11 @@ class RiskConfig(_Section):
     loss_cooldown_bars: int = Field(
         default=20, ge=0,
         description="Bars to wait after a losing trade before a new entry.",
+    )
+    max_hold_bars: int = Field(
+        default=48, ge=0,
+        description="Triple-barrier vertical: force-close a position after this "
+                    "many bars even if neither stop nor target was hit. 0 disables.",
     )
     partial_fill_liquidity_frac: float = Field(
         default=0.25, gt=0, le=1.0,

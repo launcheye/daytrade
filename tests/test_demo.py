@@ -37,11 +37,12 @@ def test_demo_confidence_near_060(demo_result):
 
 
 def test_demo_entry_price(demo_result):
-    assert round(demo_result.decision.entry) == 103_227
+    # Levels reflect the Phase-1 stop config (2x stop, raised vol floor).
+    assert round(demo_result.decision.entry) == 103_020
 
 
 def test_demo_stop_price(demo_result):
-    assert round(demo_result.decision.stop) == 103_020
+    assert round(demo_result.decision.stop) == 102_193
 
 
 def test_demo_target_price(demo_result):

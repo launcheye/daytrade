@@ -105,6 +105,7 @@ class Backtester:
         risk = RiskEngine(self.config.risk, self.config.paper.starting_cash)
         symbol = candles[-1].symbol
 
+        max_hold = self.config.risk.max_hold_bars
         equity_curve: List[float] = []
         open_trade: Optional[_OpenTrade] = None
         bars_in_position = 0
@@ -127,6 +128,10 @@ class Backtester:
             if open_trade is not None:
                 bars_in_position += 1
                 exit_price = self._exit_price(bar, open_trade)
+                if exit_price is None and max_hold > 0 and \
+                        i - open_trade.bar_opened >= max_hold:
+                    # Triple-barrier vertical: time-stop a stalled position.
+                    exit_price = bar.close
                 if exit_price is not None:
                     liq = self._liquidity(bar.close)
                     broker.submit_market_order(

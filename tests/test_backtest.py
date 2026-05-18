@@ -51,6 +51,25 @@ def test_backtest_fees_and_slippage_nonneg(uptrend_backtest):
     assert m.total_slippage >= 0.0
 
 
+def test_backtest_time_stop_forces_earlier_exits(config):
+    """The triple-barrier time-stop closes stalled positions sooner.
+
+    A 2-bar hold limit turns long-running positions into more, shorter
+    trades than a 90-bar limit does.
+    """
+    from daytrade.exchanges import generate_random_walk
+    series = generate_random_walk("BTCUSDT", n_bars=400, start_price=30_000.0,
+                                  drift=0.0010, volatility=0.005, seed=21)
+    short = config.model_copy(
+        update={"risk": config.risk.model_copy(update={"max_hold_bars": 2})})
+    long = config.model_copy(
+        update={"risk": config.risk.model_copy(update={"max_hold_bars": 90})})
+    m_short = Backtester(short).run(series).metrics
+    m_long = Backtester(long).run(series).metrics
+    assert m_short.total_trades > 0 and m_long.total_trades > 0
+    assert m_short.total_trades > m_long.total_trades
+
+
 @pytest.mark.integration
 def test_pipeline_end_to_end(uptrend_candles, config):
     """The full analysis pipeline produces a coherent decision."""
