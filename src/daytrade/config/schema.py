@@ -387,6 +387,36 @@ class SandboxConfig(_Section):
         return self
 
 
+class GatingConfig(_Section):
+    """Decision gates layered on top of the fusion engine's signal.
+
+    Each gate can only *suppress* a trade, never create one — analysis
+    proposes, the gates dispose. Paper / simulation only.
+    """
+
+    min_regime_accuracy: float = Field(
+        default=0.50, ge=0.0, le=1.0,
+        description="Block new trades in a market regime whose own measured "
+                    "out-of-sample accuracy is below this floor.",
+    )
+    regime_min_samples: int = Field(
+        default=30, ge=1,
+        description="Evaluated predictions a regime needs before the regime "
+                    "gate will judge it; below this the regime is allowed "
+                    "through so it can accumulate evidence.",
+    )
+    min_calibrated_confidence: float = Field(
+        default=0.50, ge=0.0, le=1.0,
+        description="Block trades whose calibrated win probability is below "
+                    "this floor (see daytrade.observatory.calibration).",
+    )
+    meta_label_min_proba: float = Field(
+        default=0.50, ge=0.0, le=1.0,
+        description="Block trades the meta-labelling model scores below this "
+                    "probability of hitting target before stop.",
+    )
+
+
 class AppConfig(_Section):
     """The complete validated application configuration."""
 
@@ -405,6 +435,7 @@ class AppConfig(_Section):
     walkforward: WalkForwardConfig = Field(default_factory=WalkForwardConfig)
     macro: MacroConfig = Field(default_factory=MacroConfig)
     fusion: FusionConfig = Field(default_factory=FusionConfig)
+    gating: GatingConfig = Field(default_factory=GatingConfig)
     killswitch: KillSwitchConfig = Field(default_factory=KillSwitchConfig)
     risk: RiskConfig = Field(default_factory=RiskConfig)
     paper: PaperConfig = Field(default_factory=PaperConfig)

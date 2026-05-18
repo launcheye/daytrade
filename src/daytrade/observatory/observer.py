@@ -38,6 +38,7 @@ from .feed import LiveMockFeed
 from .metrics import roll_up_day
 from .prediction_tracker import build_prediction_memory, evaluate_prediction
 from .readiness import ReadinessInputs, compute_readiness
+from .regime_gate import evaluate_regime_gate
 from .safety_score import SafetyInputs, aggregate_safety, compute_safety_score
 
 _log = get_logger("observatory.observer")
@@ -327,10 +328,16 @@ class Observer:
         else:
             self._activity(f"scanning {symbol}", f"condition {safety.condition}")
 
+        # --- regime gate: only trade regimes with a proven edge ---
+        regime_gate = evaluate_regime_gate(
+            safety.condition, memory,
+            self.config.gating.min_regime_accuracy,
+            self.config.gating.regime_min_samples)
+
         # --- paper-trading simulation step (entry only; exits in _manage) ---
         self._maybe_open_position(symbol, decision, screening, price,
                                   liquidity_notional, equity, now,
-                                  prediction_id)
+                                  prediction_id, regime_gate)
         return safety
 
     def _evaluate_predictions(self, now: datetime) -> int:
@@ -462,12 +469,17 @@ class Observer:
 
     def _maybe_open_position(self, symbol: str, decision, screening, price: float,
                              liquidity_notional: float, equity: float,
-                             now: datetime, prediction_id: int) -> None:
+                             now: datetime, prediction_id: int,
+                             regime_gate=None) -> None:
         if symbol in self._open or not screening.approved:
             return
         if decision.action is not Action.BUY or decision.kill_switch_active:
             return
         if not (decision.entry and decision.stop and decision.target):
+            return
+        # Regime gate: skip a BUY in a regime with no proven edge (Phase 2).
+        if regime_gate is not None and not regime_gate.allowed:
+            self._activity(f"regime gate blocked {symbol}", regime_gate.reason)
             return
         permission = self._risk.evaluate_entry(
             equity, open_positions=len(self._open), bar_index=self._cycle)
