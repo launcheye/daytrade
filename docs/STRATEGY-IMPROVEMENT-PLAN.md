@@ -85,6 +85,18 @@ ML-heavy meta-labelling last.
   filter rate / acceptance rate.
 - Restart the 30-day learning run on the improved strategy.
 
+## Results (all 5 phases shipped)
+
+| Phase | Fix | Measured outcome |
+|-------|-----|------------------|
+| 1 | ATR-width stops + time-stop | Backtest win rate 33% → 58%, return +10.7% → +12.0% |
+| 2 | Regime gate | Blocks new trades in regimes below the break-even accuracy floor |
+| 3 | Confidence calibration | Isotonic map corrects ~13-point overconfidence; trades gated on calibrated probability |
+| 4 | Meta-labelling | Out-of-sample: take-every-BUY win rate 37% → 54% (≥0.50) / 65% (≥0.60) |
+| 5 | Live + dashboard wiring | All four gates in the observer decision path; "Strategy gates" panel |
+
+301 tests pass. All changes are paper / simulation only.
+
 ## Definition of done
 
 - Walk-forward expectancy positive (or honestly reported as still negative).
