@@ -170,6 +170,10 @@ def create_app(db_path: Path | str = DEFAULT_DB_PATH) -> FastAPI:
     def gates() -> Any:
         return _safe(lambda d: d.gates())
 
+    @app.get("/api/learning-summary")
+    def learning_summary() -> Any:
+        return _safe(lambda d: d.learning_summary())
+
     @app.get("/api/predictions")
     def predictions() -> Any:
         return _safe(lambda d: d.predictions())

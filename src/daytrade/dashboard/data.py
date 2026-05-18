@@ -447,6 +447,130 @@ class DashboardData:
             "meta_detail": meta_detail,
         }
 
+    def learning_summary(self) -> Dict[str, Any]:
+        """Plain-language 'what is the bot learning' summary for the dashboard.
+
+        Bundles the bot's accumulated lessons — prediction accuracy, which
+        market regimes it understands, whether its confidence is honest, what
+        the meta-model figured out, and what the gates blocked — into short,
+        readable cards. Deliberately honest: small samples are flagged as
+        such, and implausibly-high accuracy is called out, not celebrated.
+        """
+        outcomes = self.db.outcomes(limit=8000)
+        memory = build_prediction_memory(outcomes)
+        gates = self.gates()
+        closed = self.db.closed_paper_trades(limit=5000)
+        wins = sum(1 for t in closed if (t.get("pnl") or 0) > 0)
+        prog = self.progress()
+        evaluated = memory.total
+        cards: List[Dict[str, Any]] = []
+
+        # 1) Direction accuracy.
+        acc = memory.overall_accuracy * 100
+        if evaluated < 20:
+            cards.append({"icon": "🎯", "tone": "neutral",
+                          "title": "Predicting which way the price moves",
+                          "items": [f"Only {evaluated} predictions checked so "
+                                    "far — far too early to tell. It needs a "
+                                    "few hours of data before this means "
+                                    "anything."]})
+        else:
+            items = [f"Right {acc:.0f}% of the time across {evaluated} checked "
+                     f"predictions — about {acc / 10:.1f} in every 10."]
+            if acc >= 75:
+                items.append("⚠ Suspiciously high for crypto — treat it with "
+                             "caution until the sample is much larger.")
+                tone = "warn"
+            elif acc >= 53:
+                items.append("Slightly better than a coin flip — a faint edge.")
+                tone = "good"
+            elif acc >= 47:
+                items.append("Essentially a coin flip — no clear edge yet.")
+                tone = "neutral"
+            else:
+                items.append("Worse than a coin flip so far.")
+                tone = "bad"
+            cards.append({"icon": "🎯", "tone": tone,
+                          "title": "Predicting which way the price moves",
+                          "items": items})
+
+        # 2) Per-regime understanding.
+        regimes = sorted((g for g in memory.by_condition.values()
+                          if g.samples >= 8), key=lambda g: -g.accuracy)
+        if regimes:
+            rows = []
+            for g in regimes:
+                a = g.accuracy * 100
+                verdict = ("has an edge here" if a >= 53 else
+                           "loses here" if a < 47 else "no clear edge")
+                rows.append(f"{g.label}: {a:.0f}% right over {g.samples} "
+                            f"calls — {verdict}")
+        else:
+            rows = ["Not enough data per market type yet."]
+        cards.append({"icon": "🌦", "tone": "neutral",
+                      "title": "Which market conditions it understands",
+                      "items": rows})
+
+        # 3) Confidence honesty.
+        rows = []
+        for g in sorted(memory.confidence_buckets.values(),
+                        key=lambda g: g.mean_confidence):
+            if g.samples >= 5:
+                rows.append(f"When it says ~{g.mean_confidence * 100:.0f}% "
+                            f"sure, it is really right {g.accuracy * 100:.0f}% "
+                            f"of the time ({g.samples} calls).")
+        cards.append({"icon": "⚖️", "tone": "neutral",
+                      "title": "Is its stated confidence honest?",
+                      "items": rows or ["Not enough data yet."]})
+
+        # 4) The meta-model.
+        if gates["meta_status"] == "trained":
+            cards.append({"icon": "🧠", "tone": "good",
+                          "title": "The precision filter (meta-model)",
+                          "items": [
+                              f"Trained — {gates['meta_detail']}.",
+                              "It learned that most quick long setups never "
+                              "reach their target, so it now rejects the weak "
+                              "ones.",
+                              f"Blocked {gates['meta_blocks']} trades it judged "
+                              "too unlikely to win."]})
+        else:
+            cards.append({"icon": "🧠", "tone": "neutral",
+                          "title": "The precision filter (meta-model)",
+                          "items": ["Still warming up — it trains once the bot "
+                                    "has gathered enough history (first ~30 "
+                                    "cycles)."]})
+
+        # 5) What the gates blocked.
+        cards.append({"icon": "🛡", "tone": "neutral",
+                      "title": "Trades it stopped itself from taking",
+                      "items": [
+                          f"Regime gate: {gates['regime_blocks']} blocked "
+                          "(weak market type)",
+                          f"Calibration gate: {gates['calibration_blocks']} "
+                          "blocked (overconfident signal)",
+                          f"Meta-model gate: {gates['meta_blocks']} blocked "
+                          "(low win chance)"]})
+
+        # 6) Trades actually taken.
+        if closed:
+            wr = wins / len(closed) * 100
+            items = [f"{len(closed)} paper trades closed, {wins} winners "
+                     f"({wr:.0f}% win rate)."]
+        else:
+            items = ["No trades closed yet — it is being very selective."]
+        items.append("A win rate only means something after 30-50+ trades.")
+        cards.append({"icon": "📈", "tone": "neutral",
+                      "title": "Paper trades it has actually taken",
+                      "items": items})
+
+        return {
+            "day": prog.get("current_day"),
+            "target_days": prog.get("target_days"),
+            "evaluated": evaluated,
+            "cards": cards,
+        }
+
     def predictions(self, limit: int = 100) -> List[Dict[str, Any]]:
         return self.db.recent_predictions(limit=limit)
 

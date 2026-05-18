@@ -162,6 +162,16 @@ def test_dashboard_gates_endpoint(tmp_path):
         assert key in body
 
 
+def test_dashboard_learning_summary_endpoint(tmp_path):
+    """The /api/learning-summary endpoint returns plain-language cards."""
+    client = TestClient(create_app(_learning_db(tmp_path)))
+    body = client.get("/api/learning-summary").json()
+    assert isinstance(body.get("cards"), list) and body["cards"]
+    for card in body["cards"]:
+        assert "title" in card and "icon" in card
+        assert isinstance(card.get("items"), list)
+
+
 def test_dashboard_open_without_password_env(tmp_path):
     """With no DASHBOARD_PASSWORD set the dashboard stays open (local use)."""
     client = TestClient(create_app(tmp_path / "obs.db"))
