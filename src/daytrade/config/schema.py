@@ -411,12 +411,13 @@ class GatingConfig(_Section):
                     "this floor (see daytrade.observatory.calibration).",
     )
     meta_label_edge_multiple: float = Field(
-        default=1.5, gt=0.0,
+        default=2.0, gt=0.0,
         description="Take a trade only if the meta-model scores it at least "
                     "this multiple of its own base win rate. Relative to the "
                     "base rate (not a fixed probability) so it stays "
-                    "reachable on any timeframe — a fixed 0.5 threshold was "
-                    "unreachable when the base rate was ~6%.",
+                    "reachable on any timeframe. 2.0 is the sweep-best value "
+                    "on real 1-minute data: ~7x precision lift while still "
+                    "keeping enough trades to learn from.",
     )
 
 
