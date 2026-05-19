@@ -546,14 +546,19 @@ class Observer:
                     f"calibrated win prob {calibrated:.0%} below {floor:.0%} "
                     f"(stated {decision.confidence:.0%})")
                 return
-        # Meta-labelling gate: skip a BUY the precision model scores below the
-        # win-probability floor (Phase 4 — the de Prado meta-label filter).
-        if meta_proba is not None:
-            floor = self.config.gating.meta_label_min_proba
+        # Meta-labelling gate: skip a BUY unless the precision model scores it
+        # well above its own base win rate (Phase 4 — the de Prado meta-label
+        # filter). The floor is RELATIVE to the base rate, so it stays
+        # reachable whatever the timeframe — a fixed probability floor was
+        # unreachable once the base rate fell to ~6%.
+        if meta_proba is not None and self._meta.base_win_rate is not None:
+            base = self._meta.base_win_rate
+            floor = base * self.config.gating.meta_label_edge_multiple
             if meta_proba < floor:
                 self._activity(
                     f"meta-model blocked {symbol}",
-                    f"win probability {meta_proba:.0%} below {floor:.0%}")
+                    f"win prob {meta_proba:.0%} below {floor:.0%} "
+                    f"(base rate {base:.0%})")
                 return
         permission = self._risk.evaluate_entry(
             equity, open_positions=len(self._open), bar_index=self._cycle)

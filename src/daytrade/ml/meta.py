@@ -73,6 +73,9 @@ class MetaLabelModel:
         self._pipeline: Optional[Pipeline] = None
         self.feature_names: List[str] = []
         self.n_samples = 0
+        # Unconditional fraction of training trades that won — the meta-gate
+        # threshold is set relative to this, not to a fixed probability.
+        self.base_win_rate: Optional[float] = None
 
     @property
     def is_trained(self) -> bool:
@@ -125,9 +128,10 @@ class MetaLabelModel:
         self._pipeline = pipeline
         self.feature_names = cols
         self.n_samples = len(data)
+        self.base_win_rate = float(y.mean())
         acc = float((pipeline.predict(X) == y).mean())
         result = MetaTrainResult(samples=len(data),
-                                 base_win_rate=float(y.mean()),
+                                 base_win_rate=self.base_win_rate,
                                  train_accuracy=acc)
         _log.info("meta-model trained: samples=%d base_win=%.3f acc=%.3f",
                   result.samples, result.base_win_rate, result.train_accuracy)
@@ -162,6 +166,7 @@ class MetaLabelModel:
             pickle.dump({"format_version": _FORMAT_VERSION, "seed": self.seed,
                          "feature_names": self.feature_names,
                          "n_samples": self.n_samples,
+                         "base_win_rate": self.base_win_rate,
                          "pipeline": self._pipeline}, fh)
         return path
 
@@ -175,6 +180,7 @@ class MetaLabelModel:
         model._pipeline = payload["pipeline"]
         model.feature_names = payload["feature_names"]
         model.n_samples = payload["n_samples"]
+        model.base_win_rate = payload.get("base_win_rate")
         return model
 
 

@@ -57,6 +57,9 @@ def test_meta_model_trains_and_predicts(config):
     assert result.samples > 0
     assert 0.0 <= result.base_win_rate <= 1.0
     assert model.is_trained
+    # The base win rate is stored on the model — the meta-gate threshold is
+    # set relative to it.
+    assert model.base_win_rate == result.base_win_rate
 
     proba = model.predict_win_proba(candles, config)
     assert proba is None or 0.0 <= proba <= 1.0
@@ -69,3 +72,4 @@ def test_meta_model_untrained_on_too_little_history(config):
     model = MetaLabelModel()
     assert model.train([short], config) is None
     assert not model.is_trained
+    assert model.base_win_rate is None

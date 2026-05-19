@@ -410,10 +410,13 @@ class GatingConfig(_Section):
         description="Block trades whose calibrated win probability is below "
                     "this floor (see daytrade.observatory.calibration).",
     )
-    meta_label_min_proba: float = Field(
-        default=0.50, ge=0.0, le=1.0,
-        description="Block trades the meta-labelling model scores below this "
-                    "probability of hitting target before stop.",
+    meta_label_edge_multiple: float = Field(
+        default=1.5, gt=0.0,
+        description="Take a trade only if the meta-model scores it at least "
+                    "this multiple of its own base win rate. Relative to the "
+                    "base rate (not a fixed probability) so it stays "
+                    "reachable on any timeframe — a fixed 0.5 threshold was "
+                    "unreachable when the base rate was ~6%.",
     )
 
 
