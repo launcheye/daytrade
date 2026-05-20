@@ -151,6 +151,73 @@ The dashboard then shows, at a glance:
 The readiness score and reports never say "safe to invest" — only whether
 *paper conditions look stable* or the *strategy is currently unreliable*.
 
+## Strategy overhaul — the four gates (Phases 1–4)
+
+A live diagnosis revealed four failure modes. Each was fixed with a
+research-backed technique, proven in a backtest *before* going live. The
+full write-up — methodology, sources, before/after numbers — is in
+[`docs/STRATEGY-IMPROVEMENT-PLAN.md`](docs/STRATEGY-IMPROVEMENT-PLAN.md).
+
+| # | Problem | Fix |
+|---|---------|-----|
+| 1 | No predictive edge (~50% accuracy) | **Meta-labelling** (Lopez de Prado) — a secondary GradientBoosting classifier scores P(trade hits target before stop) from triple-barrier outcomes; only trades it rates above a sweep-tuned multiple of its base win rate are taken. |
+| 2 | Trades its weakest regime | **Regime gate** — blocks new trades in any regime whose own measured accuracy is below the break-even win rate (regimes with too few samples are allowed through to gather evidence). |
+| 3 | Overconfident (~65% stated, ~53% real) | **Isotonic confidence calibration** — fitted each cycle from the bot's own evaluated history; trades are gated on the calibrated probability, not the raw stated one. |
+| 4 | Stops inside the noise (direction often right but trades cut) | **ATR-width stops** + a triple-barrier **time-stop**. Stop / target widths are multiples of an ATR-based volatility unit, swept against real history; position size shrinks with the stop to keep euro risk constant. |
+
+All four gates sit between `_observe_symbol`'s primary signal and the paper
+broker. They can only *suppress* a trade, never create one. Each gate's
+threshold is empirically swept on real Binance history, not picked by
+intuition.
+
+## Dashboard
+
+`trading-bot dashboard` (default `http://127.0.0.1:8000`) ships a
+single-page UI with:
+
+- **Command Center** — equity curve, market status, "what is it doing
+  right now", live activity feed, and a **Strategy gates** panel showing
+  how many trades each gate suppressed plus meta-model status.
+- **Markets** — live BTC and ETH price charts with **1D / 5D / 1M / 6M / 1Y**
+  range toggles, pulling real Binance kline history (cached briefly).
+- **Paper Trading** — a transactions ledger: open positions (opened-at,
+  coin, side, invested amount, entry, live price, unrealized PnL) and a
+  full closed-trade history.
+- **Progress · Symbols · Regimes · Calibration · Accuracy · Risk Console.**
+- Three header overlays — opened by buttons, no page reload:
+  - **🧠 What it's learning** — plain-language cards explaining direction
+    accuracy, per-regime understanding, confidence honesty, the meta-model,
+    what the gates blocked, and trades taken. Deliberately honest: small
+    samples are flagged as too-early; implausibly-high accuracy is called
+    out, not celebrated.
+  - **🗄 Database** — live, line-by-line feed of every row the bot writes
+    to the database (`INSERT` / `UPDATE` / `UPSERT`, colour-coded).
+  - **⊟ See Terminal** — live tail of the observer's log file.
+- Timestamps are stored UTC and rendered in the viewer's local timezone.
+- Money is shown in **€** as the simulation's play-money unit (real Binance
+  prices remain in USDT — that's the genuine market data).
+- Optional HTTP Basic-Auth gate, enabled by setting `DASHBOARD_PASSWORD`.
+
+## Remote access
+
+The dashboard is read-only and meant for private viewing. The
+recommended path is [**Tailscale**](docs/REMOTE-ACCESS.md): your phone
+joins your private network and reaches the dashboard at
+`http://<your-mac>.<tailnet>:8000` — nothing is exposed to the public
+internet. The repo ships `scripts/run-dashboard.sh` which launches the
+dashboard bound for Tailscale, with a password prompt.
+
+## On real-money trading (don't, yet)
+
+[`docs/REAL-MONEY-RISKS.md`](docs/REAL-MONEY-RISKS.md) is an objective
+inventory of what could go wrong if this bot were ever connected to a
+real broker — 9 risk categories with mechanism, magnitude, and how far
+each is **eliminable / reducible / not fixable by engineering**. Spoiler:
+the operational, security and leverage risks are fully removable; the
+**strategy-edge risk is not** — and it is currently unmet. A
+perfectly-engineered live deployment today still has negative expected
+value because the strategy has no proven edge.
+
 ## Project layout
 
 | Path | Purpose |
@@ -174,7 +241,11 @@ The readiness score and reports never say "safe to invest" — only whether
 | `src/daytrade/backtest` | Backtesting / simulation engine |
 | `src/daytrade/reporting` | Console / JSON / Markdown + daily reports |
 | `src/daytrade/observatory` | 24/7 observer, SQLite store, safety score, alerts |
+| `src/daytrade/observatory/regime_gate.py` | Phase-2 regime gate |
+| `src/daytrade/observatory/calibration.py` | Phase-3 isotonic confidence calibrator |
+| `src/daytrade/ml/meta.py` | Phase-4 meta-labelling classifier (triple-barrier) |
 | `src/daytrade/dashboard` | FastAPI backend + single-page visual dashboard |
+| `src/daytrade/research` | Historical research lab (download + backtest + walk-forward) |
 | `src/daytrade/cli` | `trading-bot` command line interface |
 | `daytrade/exchanges/sandbox.py` | Testnet-only execution (URL-allowlisted) |
 | `daytrade/exchanges/credentials.py` | API-key loading + withdrawal-key rejection |
