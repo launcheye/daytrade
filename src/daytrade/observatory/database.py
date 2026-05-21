@@ -362,8 +362,19 @@ class ObservatoryDB:
         return self._all("SELECT * FROM predictions ORDER BY id DESC LIMIT ?",
                          (limit,))
 
-    def unevaluated_predictions(self) -> List[Dict[str, Any]]:
-        return self._all("SELECT * FROM predictions WHERE evaluated=0 ORDER BY id")
+    def unevaluated_predictions(self,
+                                limit: Optional[int] = None
+                                ) -> List[Dict[str, Any]]:
+        """Predictions awaiting outcome evaluation, oldest first.
+
+        ``limit`` caps how many rows come back per call — used by the observer
+        to bound per-cycle work so a backlog (e.g. of delisted-pair predictions
+        that can never resolve) cannot stall the cycle.
+        """
+        sql = "SELECT * FROM predictions WHERE evaluated=0 ORDER BY id"
+        if limit is not None and limit > 0:
+            return self._all(sql + " LIMIT ?", (int(limit),))
+        return self._all(sql)
 
     def outcomes(self, limit: int = 500) -> List[Dict[str, Any]]:
         return self._all(

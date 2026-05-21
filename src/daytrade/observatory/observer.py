@@ -391,17 +391,29 @@ class Observer:
                 f"{result.samples} samples · base win rate "
                 f"{result.base_win_rate:.0%}")
 
+    #: Cap on per-cycle evaluations — keeps the cycle moving even when a big
+    #: backlog (e.g. delisted-pair predictions that will never resolve) is
+    #: pending. The backlog drains over subsequent cycles instead of blocking.
+    _EVAL_PER_CYCLE = 200
+
     def _evaluate_predictions(self, now: datetime) -> int:
         """Score every matured-but-unevaluated prediction against reality."""
         evaluated = 0
-        for prediction in self.db.unevaluated_predictions():
+        for prediction in self.db.unevaluated_predictions(
+                limit=self._EVAL_PER_CYCLE):
             try:
                 outcome, fully = evaluate_prediction(prediction, self.feed, now)
             except ExchangeError as exc:
-                # A missing kline (data gap, delisted pair) must not crash the
-                # whole cycle — skip this prediction and retry it next cycle.
-                _log.warning("skipped prediction %s — no market data: %s",
+                # A missing kline (data gap, delisted pair) used to retry every
+                # cycle and pile up. Mark it evaluated so it falls out of the
+                # queue — if Binance cannot return the kline now, it never will.
+                _log.warning("skipped prediction %s — no market data, "
+                             "marking evaluated: %s",
                              prediction.get("id"), exc)
+                try:
+                    self.db.mark_prediction_evaluated(prediction["id"])
+                except Exception:  # noqa: BLE001 - never let bookkeeping crash a cycle
+                    pass
                 continue
             if outcome is None:
                 continue

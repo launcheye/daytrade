@@ -22,7 +22,7 @@ symbols:
   - LINKUSDT
   - ADAUSDT
   - DOTUSDT
-  - MATICUSDT
+  # MATICUSDT  removed — migrated to POL; klines no longer resolve
   - LTCUSDT
   - TRXUSDT
   - ATOMUSDT
@@ -44,7 +44,7 @@ symbols:
   - SUIUSDT
   - SEIUSDT
   - TIAUSDT
-  - RNDRUSDT
+  # RNDRUSDT  removed — migrated to RENDER; klines no longer resolve
   - IMXUSDT
   - GRTUSDT
 
