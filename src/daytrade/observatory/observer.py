@@ -49,6 +49,9 @@ _REPO_ROOT = Path(__file__).resolve().parents[3]
 _LOG_FILE = _REPO_ROOT / "logs" / "daytrade.log"
 _OBSERVER_REPORTS = _REPO_ROOT / "reports" / "observer"
 _NOW_PATH = _REPO_ROOT / "data" / "now.json"
+# Persisted meta-labelling model — saved after each retrain, reloaded on
+# startup so learning carries across restarts instead of rebuilding cold.
+_META_MODEL_PATH = _REPO_ROOT / "artifacts" / "meta_model.pkl"
 
 # The 10 steps of one observation cycle (for the dashboard "Now" panel).
 CYCLE_STEPS = [
@@ -131,6 +134,7 @@ class Observer:
             _log.warning("recovered %d crashed/abandoned prior run(s)", crashed)
         self._run_id = self.db.start_bot_run(pid=os.getpid())
         self._reload_open_positions()
+        self._load_persisted_meta()
         _log.info("observer run #%d started (pid=%d), %d open position(s) reloaded",
                   self._run_id, os.getpid(), len(self._open))
 
@@ -148,6 +152,28 @@ class Observer:
                 "entry": trade["entry_price"], "stop": trade["stop"],
                 "target": trade["target"],
             }
+
+    def _load_persisted_meta(self) -> None:
+        """Restart-safety: re-adopt the meta-model trained by a prior run.
+
+        A missing, corrupt, or version-incompatible file is logged and
+        ignored — the model simply starts untrained and rebuilds on the
+        first retrain, exactly as before persistence existed.
+        """
+        if not _META_MODEL_PATH.exists():
+            return
+        try:
+            self._meta = MetaLabelModel.load(_META_MODEL_PATH)
+        except Exception as exc:  # noqa: BLE001 - a bad file must not block startup
+            _log.warning("could not load persisted meta-model (%s); "
+                         "starting untrained", exc)
+            return
+        rate = (f"{self._meta.base_win_rate:.0%}"
+                if self._meta.base_win_rate is not None else "n/a")
+        _log.info("loaded persisted meta-model: %d samples, base win rate %s",
+                  self._meta.n_samples, rate)
+        self._activity("meta-model restored from disk",
+                       f"{self._meta.n_samples} samples · base win rate {rate}")
 
     # -- the cycle -----------------------------------------------------------
 
@@ -386,6 +412,10 @@ class Observer:
             _log.warning("meta-model retrain failed: %s", exc)
             return
         if result is not None:
+            try:
+                self._meta.save(_META_MODEL_PATH)
+            except Exception as exc:  # noqa: BLE001 - a save failure must not kill the cycle
+                _log.warning("could not persist meta-model: %s", exc)
             self._activity(
                 "meta-model retrained",
                 f"{result.samples} samples · base win rate "

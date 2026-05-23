@@ -18,6 +18,8 @@ from daytrade.observatory import (
 )
 from daytrade.observatory.daily_report import build_daily_report_markdown
 from daytrade.observatory.safety_score import SafetyInputs
+from daytrade.exchanges import generate_random_walk
+from daytrade.ml.meta import MetaLabelModel
 
 _T0 = datetime(2026, 5, 17, 12, 0, tzinfo=timezone.utc)
 
@@ -215,6 +217,60 @@ def test_observer_restart_recovers(tmp_path):
     runs = [r for r in [obs2.db.current_bot_run()] if r]
     assert runs and runs[0]["status"] == "running"
     obs2.stop()
+
+
+def test_observer_loads_persisted_meta_on_start(tmp_path, monkeypatch, config):
+    """A meta-model left on disk by a prior run is reloaded on start()."""
+    from daytrade.observatory import observer as observer_mod
+    model_path = tmp_path / "meta_model.pkl"
+    monkeypatch.setattr(observer_mod, "_META_MODEL_PATH", model_path)
+
+    # A prior run's trained model, persisted where the observer reads it.
+    candles = generate_random_walk("BTCUSDT", n_bars=500, start_price=100.0,
+                                   drift=0.0003, volatility=0.006, seed=5)
+    trained = MetaLabelModel()
+    trained.train([candles], config)
+    trained.save(model_path)
+
+    obs = _observer(tmp_path)
+    assert not obs._meta.is_trained      # fresh model before start()
+    obs.start()
+    assert obs._meta.is_trained          # adopted the persisted model
+    assert obs._meta.n_samples == trained.n_samples
+    obs.stop()
+
+
+def test_observer_start_survives_corrupt_meta_file(tmp_path, monkeypatch):
+    """A corrupt model file is ignored; the observer starts untrained."""
+    from daytrade.observatory import observer as observer_mod
+    model_path = tmp_path / "meta_model.pkl"
+    model_path.write_bytes(b"not a pickle")
+    monkeypatch.setattr(observer_mod, "_META_MODEL_PATH", model_path)
+
+    obs = _observer(tmp_path)
+    obs.start()                          # must not raise
+    assert not obs._meta.is_trained
+    obs.stop()
+
+
+def test_observer_persists_meta_after_retrain(tmp_path, monkeypatch):
+    """A cycle that retrains the meta-model writes it to disk for next time."""
+    from daytrade.observatory import observer as observer_mod
+    model_path = tmp_path / "meta_model.pkl"
+    monkeypatch.setattr(observer_mod, "_META_MODEL_PATH", model_path)
+
+    obs = _observer(tmp_path)
+    obs.start()
+    obs.run_once(_T0)                    # cycle 1 triggers a meta retrain
+    trained = obs._meta.is_trained
+    obs.stop()
+
+    if trained:                          # only asserts the new persistence path
+        assert model_path.exists()
+        obs2 = _observer(tmp_path)
+        obs2.start()
+        assert obs2._meta.is_trained     # reloaded what cycle 1 saved
+        obs2.stop()
 
 
 def test_daily_report_generates(tmp_path):

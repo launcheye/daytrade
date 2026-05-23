@@ -73,3 +73,24 @@ def test_meta_model_untrained_on_too_little_history(config):
     assert model.train([short], config) is None
     assert not model.is_trained
     assert model.base_win_rate is None
+
+
+def test_meta_model_save_load_round_trip(config, tmp_path):
+    """A trained model survives save -> load with identical predictions."""
+    candles = generate_random_walk("BTCUSDT", n_bars=500, start_price=100.0,
+                                   drift=0.0003, volatility=0.006, seed=5)
+    model = MetaLabelModel()
+    model.train([candles], config)
+    assert model.is_trained
+
+    path = model.save(tmp_path / "meta_model.pkl")
+    assert path.exists()
+
+    loaded = MetaLabelModel.load(path)
+    assert loaded.is_trained
+    assert loaded.n_samples == model.n_samples
+    assert loaded.base_win_rate == model.base_win_rate
+    assert loaded.feature_names == model.feature_names
+    # Same model -> same probability on the same bar.
+    assert (loaded.predict_win_proba(candles, config)
+            == model.predict_win_proba(candles, config))
