@@ -49,19 +49,29 @@ def evaluate_prediction(
     target = prediction.get("target")
     pred_ts = _parse_ts(prediction["ts"])
 
-    prices: Dict[str, float] = {}
-    for label, mins in HORIZONS.items():
-        horizon_time = pred_ts + timedelta(minutes=mins)
-        if now >= horizon_time:
-            prices[label] = round(feed.price_at(symbol, horizon_time), 8)
-
-    if not prices:
+    # Which horizons have actually elapsed? The longest matured one bounds the
+    # price window we need to read.
+    matured = {label: mins for label, mins in HORIZONS.items()
+               if now >= pred_ts + timedelta(minutes=mins)}
+    if not matured:
         return None, False  # nothing has matured yet
 
+    longest_mins = max(matured.values())
+
+    # Warm the feed's cache for the whole window in one shot. On the real feed
+    # this turns a ~240-call-per-minute storm into a single ranged fetch; on
+    # in-memory feeds (the simulator) there is no such method and nothing to do.
+    prefetch = getattr(feed, "prefetch_minutes", None)
+    if prefetch is not None:
+        prefetch(symbol, pred_ts, pred_ts + timedelta(minutes=longest_mins))
+
+    prices: Dict[str, float] = {
+        label: round(feed.price_at(symbol, pred_ts + timedelta(minutes=mins)), 8)
+        for label, mins in matured.items()
+    }
+
     fully_evaluated = "4h" in prices
-    longest_label = max(prices, key=lambda k: HORIZONS[k])
-    longest_mins = HORIZONS[longest_label]
-    final_price = prices[longest_label]
+    final_price = prices[max(prices, key=lambda k: HORIZONS[k])]
 
     outcome: Dict[str, Any] = {
         "symbol": symbol,

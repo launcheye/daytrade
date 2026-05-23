@@ -79,6 +79,43 @@ def test_price_at_returns_close_and_caches():
     assert again == 101.5 and len(feed.calls) == n
 
 
+def _klines_calls(feed):
+    return [c for c in feed.calls if c[0] == "/api/v3/klines"]
+
+
+def test_prefetch_minutes_warms_window_in_one_call():
+    feed = _MockFeed()
+    feed.prefetch_minutes("BTCUSDT", _T, _T + timedelta(hours=4))  # 240 bars
+    assert len(_klines_calls(feed)) == 1                # one ranged fetch
+    n = len(feed.calls)
+    # Every minute in the window now answers from cache — no extra HTTP.
+    for m in (1, 5, 60, 239):
+        feed.price_at("BTCUSDT", _T + timedelta(minutes=m))
+    assert len(feed.calls) == n
+
+
+def test_prefetch_minutes_skips_when_already_cached():
+    feed = _MockFeed()
+    feed.prefetch_minutes("BTCUSDT", _T, _T + timedelta(hours=2))
+    n = len(feed.calls)
+    feed.prefetch_minutes("BTCUSDT", _T, _T + timedelta(hours=2))  # all cached
+    assert len(feed.calls) == n
+
+
+def test_evaluate_prediction_uses_one_ranged_fetch():
+    """The fix: evaluating a matured prediction no longer fetches per-minute."""
+    from daytrade.observatory.prediction_tracker import evaluate_prediction
+    feed = _MockFeed()
+    prediction = {"symbol": "BTCUSDT", "direction": "buy", "entry": 100.0,
+                  "stop": 90.0, "target": 120.0, "ts": _T.isoformat()}
+    outcome, fully = evaluate_prediction(
+        prediction, feed, now=_T + timedelta(hours=5))
+    assert outcome is not None and fully
+    # One batched klines call total — not ~240 single-minute requests.
+    assert len(_klines_calls(feed)) == 1
+    assert outcome["target_hit"] == 1 and outcome["stop_hit"] == 0
+
+
 def test_orderbook_at_is_uncrossed():
     book = _MockFeed().orderbook_at("BTCUSDT", _T)
     assert book.best_bid < book.best_ask
