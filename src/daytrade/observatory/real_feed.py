@@ -131,6 +131,41 @@ class RealMarketFeed:
         self._minute_close[key] = close
         return close
 
+    def prefetch_minutes(self, symbol: str, start: datetime,
+                         end: datetime) -> None:
+        """Warm the minute-close cache for ``[start, end]`` in as few calls as
+        possible.
+
+        Evaluating a prediction walks its price path minute-by-minute. Without
+        this, every minute is a separate ``limit=1`` kline request — a 4-hour
+        window becomes ~240 sequential HTTP round-trips. One ranged fetch
+        returns up to 1000 1-minute bars, collapsing that whole window into a
+        single call (the loop only iterates for windows beyond 1000 minutes).
+        """
+        start_ms = _minute_ms(start)
+        end_ms = _minute_ms(end)
+        if end_ms < start_ms:
+            return
+        cursor = start_ms
+        while cursor <= end_ms:
+            # Skip the request entirely if this whole batch is already cached.
+            if all((symbol, ms) in self._minute_close
+                   for ms in range(cursor, min(cursor + 1000 * 60_000,
+                                               end_ms + 60_000), 60_000)):
+                cursor += 1000 * 60_000
+                continue
+            rows = self._get("/api/v3/klines", {
+                "symbol": symbol, "interval": "1m",
+                "startTime": cursor, "endTime": end_ms, "limit": 1000})
+            if not rows:
+                break
+            for k in rows:
+                self._minute_close[(symbol, int(k[0]))] = float(k[4])
+            last_open = int(rows[-1][0])
+            if len(rows) < 1000 or last_open >= end_ms:
+                break
+            cursor = last_open + 60_000
+
     def orderbook_at(self, symbol: str, as_of: datetime) -> OrderBookSnapshot:
         """A real L2 orderbook snapshot for ``symbol``.
 
